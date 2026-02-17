@@ -1,0 +1,9 @@
+- id: og_categories_refresh
+  alias: "Refresh OurGroceries Categories"
+  trigger:
+    - platform: homeassistant
+      event: start
+    - platform: time_pattern
+      minutes: "/30"
+  action:
+    - service: shell_command.update_og_categories
