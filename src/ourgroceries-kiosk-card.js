@@ -128,6 +128,7 @@ class OurGroceriesKioskCard extends HTMLElement {
     this._domBuilt = false;
     this._inputVisible = false;
     this._HISTORY_KEY = 'og-kiosk-history';
+    this._UID_MAP_KEY = 'og-kiosk-uid-map';
     this._MAX_HISTORY = 500;
     this._isFirstUpdate = true;
 
@@ -167,6 +168,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       show_completed: !!config.show_completed,
     };
     this._HISTORY_KEY = `og-kiosk-history-${this._config.entity}`;
+    this._UID_MAP_KEY = `og-kiosk-uid-map-${this._config.entity}`;
     this._buildDom();
   }
 
@@ -220,9 +222,6 @@ class OurGroceriesKioskCard extends HTMLElement {
                        autocomplete="off" autocorrect="on" autocapitalize="sentences" />
                 <div id="og-autocomplete" class="autocomplete-dropdown"></div>
               </div>
-              <button id="og-add-btn" class="og-add-btn" aria-label="Add">
-                <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-              </button>
               <button id="og-close-input-btn" class="og-close-input-btn" aria-label="Close">
                 <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
               </button>
@@ -266,7 +265,7 @@ class OurGroceriesKioskCard extends HTMLElement {
 
         <!-- Category picker (overlay) -->
         <div id="og-category-overlay" class="og-category-overlay hidden">
-          <div class="og-category-header">
+          <div class="og-category-picker-header">
             <button id="og-category-back-btn" class="og-category-back-btn" aria-label="Back">
               <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
               <span>Back</span>
@@ -300,7 +299,6 @@ class OurGroceriesKioskCard extends HTMLElement {
     // --- Main list view events ---
     root.getElementById('og-header-add-btn').addEventListener('click', () => this._showInput());
     root.getElementById('og-close-input-btn').addEventListener('click', () => this._hideInput());
-    root.getElementById('og-add-btn').addEventListener('click', () => this._handleAdd());
 
     const input = root.getElementById('og-input');
     const autocomplete = root.getElementById('og-autocomplete');
@@ -790,22 +788,6 @@ class OurGroceriesKioskCard extends HTMLElement {
       #og-input:focus {
         border-color: var(--og-green);
       }
-      .og-add-btn {
-        width: 48px;
-        height: 48px;
-        min-width: 48px;
-        border: none;
-        border-radius: 8px;
-        background: var(--og-green);
-        color: var(--og-white);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: opacity 0.2s;
-        touch-action: manipulation;
-      }
-      .og-add-btn:active { opacity: 0.7; }
       .og-close-input-btn {
         width: 48px;
         height: 48px;
@@ -878,13 +860,12 @@ class OurGroceriesKioskCard extends HTMLElement {
       }
 
       .og-category-header {
-        background: var(--og-gold);
-        padding: 8px 16px;
-        font-size: 16px;
+        background: #d3bb19;
+        padding: 4px 16px;
+        font-size: 17px;
         font-weight: 700;
         color: var(--og-white);
         letter-spacing: 0.2px;
-        border-left: 4px solid var(--og-orange);
       }
 
       .og-item {
@@ -908,7 +889,7 @@ class OurGroceriesKioskCard extends HTMLElement {
 
       .og-item-name {
         flex: 1;
-        font-size: 18px;
+        font-size: 22px;
         line-height: 1.3;
         word-break: break-word;
         color: var(--og-text);
@@ -1143,7 +1124,7 @@ class OurGroceriesKioskCard extends HTMLElement {
         display: flex;
         flex-direction: column;
       }
-      .og-category-header {
+      .og-category-picker-header {
         background: var(--og-green);
         padding: 14px 16px;
         display: flex;
@@ -1255,9 +1236,19 @@ class OurGroceriesKioskCard extends HTMLElement {
     this._isFirstUpdate = false;
     this._previousItemUids = newUids;
 
+    // Track uid->name to detect renames and clean stale history entries
+    const oldUidMap = this._getUidMap();
+    const newUidMap = {};
     for (const item of allItems) {
+      newUidMap[item.uid] = item.summary;
+      const oldName = oldUidMap[item.uid];
+      if (oldName && oldName !== item.summary) {
+        // Item was renamed — remove old name (and quantity variants) from history
+        this._removeFromHistory(oldName);
+      }
       this._addToHistory(item.summary);
     }
+    this._saveUidMap(newUidMap);
 
     this._items = allItems;
     this._flashUids = flashUids;
@@ -1426,12 +1417,10 @@ class OurGroceriesKioskCard extends HTMLElement {
     const dropdown = this.shadowRoot.getElementById('og-autocomplete');
     const query = input.value.trim().toLowerCase();
 
-    if (query.length < 1) {
-      this._hideAutocomplete();
-      return;
-    }
+    const candidates = query.length < 1
+      ? this._getRecentCandidates()
+      : this._getAutocompleteCandidates(query);
 
-    const candidates = this._getAutocompleteCandidates(query);
     if (candidates.length === 0) {
       this._hideAutocomplete();
       return;
@@ -1440,10 +1429,10 @@ class OurGroceriesKioskCard extends HTMLElement {
     this._autocompleteIdx = -1;
     dropdown.innerHTML = '';
 
-    candidates.slice(0, 8).forEach((c) => {
+    candidates.slice(0, 10).forEach((c) => {
       const div = document.createElement('div');
       div.className = 'ac-item';
-      let html = this._highlightMatch(c.text, query);
+      let html = query.length > 0 ? this._highlightMatch(c.text, query) : this._escHtml(c.text);
       if (c.onList) html += '<span class="ac-on-list">(on list)</span>';
       div.innerHTML = html;
       div.addEventListener('click', () => {
@@ -1479,23 +1468,68 @@ class OurGroceriesKioskCard extends HTMLElement {
     items[this._autocompleteIdx].scrollIntoView({ block: 'nearest' });
   }
 
-  _getAutocompleteCandidates(query) {
-    const history = this._getHistory();
+  /**
+   * Build the unified pool of autocomplete items from master categories
+   * (all items ever added to OurGroceries) plus localStorage history.
+   * Master categories keys are lowercase; history provides proper casing.
+   */
+  _buildAutocompletePool() {
     const currentNamesLower = new Set(
       this._items
         .filter((i) => i.status === 'needs_action')
         .map((i) => i.summary.toLowerCase())
     );
 
-    const seen = new Set();
-    const pool = [];
+    // Current item base names (lowercase, without quantity) — these are the
+    // canonical names. We'll prefer these over stale master list entries.
+    const currentBaseNames = new Set(
+      this._items
+        .filter((i) => i.status === 'needs_action')
+        .map((i) => this._parseQuantity(i.summary.trim()).baseName.toLowerCase())
+    );
+
+    // Build a lowercase -> display-name map from history (preserves casing)
+    const history = this._getHistory();
+    const historyDisplay = {};
     for (const h of history) {
       const key = h.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        pool.push({ text: h, onList: currentNamesLower.has(key) });
-      }
+      if (!historyDisplay[key]) historyDisplay[key] = h;
     }
+
+    // Deduplicate on base name (strip quantity suffixes like "(2)")
+    const seenBase = new Set();
+    const pool = [];
+
+    const addEntry = (display) => {
+      const base = this._parseQuantity(display).baseName.toLowerCase();
+      if (seenBase.has(base)) return;
+      seenBase.add(base);
+      pool.push({ text: display, onList: currentNamesLower.has(display.toLowerCase()) });
+    };
+
+    // 1. Current list items first (these are the canonical names)
+    for (const item of this._items) {
+      if (item.status !== 'needs_action') continue;
+      const baseName = this._parseQuantity(item.summary.trim()).baseName;
+      addEntry(baseName);
+    }
+
+    // 2. Master categories (every item ever added, keys are lowercase)
+    for (const key of Object.keys(this._masterCategories)) {
+      const display = historyDisplay[key] || this._titleCase(key);
+      addEntry(display);
+    }
+
+    // 3. History items not already covered
+    for (const h of history) {
+      addEntry(h);
+    }
+
+    return pool;
+  }
+
+  _getAutocompleteCandidates(query) {
+    const pool = this._buildAutocompletePool();
 
     const scored = [];
     for (const entry of pool) {
@@ -1508,6 +1542,31 @@ class OurGroceriesKioskCard extends HTMLElement {
 
     scored.sort((a, b) => b.score - a.score);
     return scored;
+  }
+
+  _getRecentCandidates() {
+    const currentNamesLower = new Set(
+      this._items
+        .filter((i) => i.status === 'needs_action')
+        .map((i) => i.summary.toLowerCase())
+    );
+
+    // For empty-input, show recent history (preserves recency order)
+    const history = this._getHistory();
+    const seen = new Set();
+    const results = [];
+    for (const h of history) {
+      const key = h.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        results.push({ text: h, onList: currentNamesLower.has(key) });
+      }
+    }
+    return results;
+  }
+
+  _titleCase(str) {
+    return str.replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
   _fuzzyScore(text, query) {
@@ -1561,6 +1620,35 @@ class OurGroceriesKioskCard extends HTMLElement {
       history.unshift(trimmed);
       if (history.length > this._MAX_HISTORY) history = history.slice(0, this._MAX_HISTORY);
       localStorage.setItem(this._HISTORY_KEY, JSON.stringify(history));
+    } catch (e) { /* ignore */ }
+  }
+
+  _removeFromHistory(item) {
+    if (!item || typeof item !== 'string') return;
+    const baseName = this._parseQuantity(item.trim()).baseName.toLowerCase();
+    try {
+      let history = this._getHistory();
+      history = history.filter((h) => {
+        const hBase = this._parseQuantity(h).baseName.toLowerCase();
+        return hBase !== baseName;
+      });
+      localStorage.setItem(this._HISTORY_KEY, JSON.stringify(history));
+    } catch (e) { /* ignore */ }
+  }
+
+  /* ---- UID map (localStorage) ---- */
+
+  _getUidMap() {
+    try {
+      const raw = localStorage.getItem(this._UID_MAP_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) { /* ignore */ }
+    return {};
+  }
+
+  _saveUidMap(map) {
+    try {
+      localStorage.setItem(this._UID_MAP_KEY, JSON.stringify(map));
     } catch (e) { /* ignore */ }
   }
 
