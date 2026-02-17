@@ -993,6 +993,7 @@ class OurGroceriesKioskCard extends HTMLElement {
     const prevView = this._view;
     this._view = 'settings';
 
+    const isAdmin = !!(this._hass && this._hass.user && this._hass.user.is_admin);
     const themeKeys = ['system', ...Object.keys(THEMES)];
 
     let html = `
@@ -1022,6 +1023,10 @@ class OurGroceriesKioskCard extends HTMLElement {
     html += `
           </div>
         </div>
+    `;
+
+    if (isAdmin) {
+      html += `
         <div class="og-setting-section">
           <div class="og-setting-label">List Mode</div>
           <div class="og-setting-row">
@@ -1032,37 +1037,56 @@ class OurGroceriesKioskCard extends HTMLElement {
         <div class="og-setting-section" id="og-list-select-section" style="${this._config.list_mode === 'single' ? '' : 'display:none'}">
           <div class="og-setting-label">Locked List</div>
           <div class="og-setting-list-options">
-    `;
+      `;
 
-    for (const list of this._lists) {
-      const active = this._config.locked_list && list.name.toLowerCase() === this._config.locked_list.toLowerCase();
-      html += `<button class="og-setting-list-option${active ? ' active' : ''}" data-list-name="${this._escAttr(list.name)}">${this._escHtml(list.name)}</button>`;
-    }
+      for (const list of this._lists) {
+        const active = this._config.locked_list && list.name.toLowerCase() === this._config.locked_list.toLowerCase();
+        html += `<button class="og-setting-list-option${active ? ' active' : ''}" data-list-name="${this._escAttr(list.name)}">${this._escHtml(list.name)}</button>`;
+      }
 
-    html += `
+      html += `
           </div>
         </div>
         <div class="og-setting-section" id="og-default-list-section" style="${this._config.list_mode !== 'single' ? '' : 'display:none'}">
           <div class="og-setting-label">Default List (optional)</div>
           <div class="og-setting-list-options">
             <button class="og-setting-list-option${!this._config.default_list ? ' active' : ''}" data-list-name="">None</button>
-    `;
+      `;
 
-    for (const list of this._lists) {
-      const active = this._config.default_list && list.name.toLowerCase() === this._config.default_list.toLowerCase();
-      html += `<button class="og-setting-list-option${active ? ' active' : ''}" data-list-name="${this._escAttr(list.name)}">${this._escHtml(list.name)}</button>`;
+      for (const list of this._lists) {
+        const active = this._config.default_list && list.name.toLowerCase() === this._config.default_list.toLowerCase();
+        html += `<button class="og-setting-list-option${active ? ' active' : ''}" data-list-name="${this._escAttr(list.name)}">${this._escHtml(list.name)}</button>`;
+      }
+
+      html += `
+          </div>
+        </div>
+      `;
     }
 
     html += `
-          </div>
-        </div>
       </div>
     `;
 
     root.innerHTML = html;
 
-    root.querySelector('#og-settings-back').addEventListener('click', () => {
-      if (prevView === 'list' && this._currentListId) {
+    root.querySelector('#og-settings-back').addEventListener('click', async () => {
+      // Admin selecting single mode must pick a locked list before leaving
+      if (isAdmin && this._config.list_mode === 'single' && !this._config.locked_list) {
+        const section = root.querySelector('#og-list-select-section');
+        if (section) {
+          section.style.display = '';
+          section.scrollIntoView({ behavior: 'smooth' });
+          section.classList.add('og-setting-highlight');
+          setTimeout(() => section.classList.remove('og-setting-highlight'), 1500);
+        }
+        return;
+      }
+
+      // Single-list mode: always navigate to the locked list
+      if (this._config.list_mode === 'single' && this._config.locked_list) {
+        await this._navigateToListByName(this._config.locked_list);
+      } else if (prevView === 'list' && this._currentListId) {
         this._view = 'list';
         this._renderListView();
       } else {
@@ -1081,37 +1105,39 @@ class OurGroceriesKioskCard extends HTMLElement {
       });
     });
 
-    // List mode
-    root.querySelectorAll('.og-setting-option').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this._config.list_mode = btn.dataset.mode;
-        this._fireConfigChanged();
-        this._renderSettings();
-      });
-    });
-
-    // Locked list / default list
-    const listSelectSection = root.querySelector('#og-list-select-section');
-    const defaultListSection = root.querySelector('#og-default-list-section');
-
-    if (listSelectSection) {
-      listSelectSection.querySelectorAll('.og-setting-list-option').forEach(btn => {
+    if (isAdmin) {
+      // List mode
+      root.querySelectorAll('.og-setting-option').forEach(btn => {
         btn.addEventListener('click', () => {
-          this._config.locked_list = btn.dataset.listName;
+          this._config.list_mode = btn.dataset.mode;
           this._fireConfigChanged();
           this._renderSettings();
         });
       });
-    }
 
-    if (defaultListSection) {
-      defaultListSection.querySelectorAll('.og-setting-list-option').forEach(btn => {
-        btn.addEventListener('click', () => {
-          this._config.default_list = btn.dataset.listName;
-          this._fireConfigChanged();
-          this._renderSettings();
+      // Locked list / default list
+      const listSelectSection = root.querySelector('#og-list-select-section');
+      const defaultListSection = root.querySelector('#og-default-list-section');
+
+      if (listSelectSection) {
+        listSelectSection.querySelectorAll('.og-setting-list-option').forEach(btn => {
+          btn.addEventListener('click', () => {
+            this._config.locked_list = btn.dataset.listName;
+            this._fireConfigChanged();
+            this._renderSettings();
+          });
         });
-      });
+      }
+
+      if (defaultListSection) {
+        defaultListSection.querySelectorAll('.og-setting-list-option').forEach(btn => {
+          btn.addEventListener('click', () => {
+            this._config.default_list = btn.dataset.listName;
+            this._fireConfigChanged();
+            this._renderSettings();
+          });
+        });
+      }
     }
   }
 
@@ -1794,7 +1820,10 @@ class OurGroceriesKioskCard extends HTMLElement {
         padding: 16px;
         max-height: 70vh; overflow-y: auto;
       }
-      .og-setting-section { margin-bottom: 24px; }
+      .og-setting-section { margin-bottom: 24px; transition: background 0.3s; border-radius: 8px; }
+      .og-setting-highlight { background: rgba(var(--rgb-accent-color, 255,165,0), 0.15); padding: 8px; margin-left: -8px; margin-right: -8px; }
+      @keyframes og-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+      .og-setting-highlight .og-setting-label { animation: og-pulse 0.5s ease-in-out 2; }
       .og-setting-label {
         font-size: 14px; font-weight: 600;
         text-transform: uppercase; letter-spacing: 0.5px;
