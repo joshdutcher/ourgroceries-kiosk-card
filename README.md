@@ -1,76 +1,82 @@
 # OurGroceries Kiosk Card
 
-A Home Assistant Lovelace card designed for kitchen wall tablets. Provides a full-screen, touch-friendly interface for managing your OurGroceries shopping lists — styled to match the official OurGroceries Android app.
+A touch-friendly Home Assistant Lovelace card for managing OurGroceries shopping lists on a wall tablet. One HACS install, enter your credentials, add the card.
 
-**No todo entities. No shell commands. No YAML configuration required.** One HACS install, enter your credentials, add the card, and go.
+<!-- screenshot: card on tablet showing a list with items and categories -->
+![Card Screenshot](screenshots/card.png)
 
 ## Features
 
-- Browse all your OurGroceries lists or lock to a single list
-- Add, edit, and remove items
-- Tap items to cross them off; bulk delete or uncross crossed-off items
-- Items grouped by category with colored category bars
-- Category picker syncs changes back to OurGroceries
-- Quantity controls (Fewer / More)
-- 13 built-in themes + system auto (light/dark) theme
+- Browse all lists or lock to a single list
+- Add, edit, cross off, and remove items
+- Category grouping with colored bars and a category picker
+- Quantity controls
+- 13 built-in themes + system auto (light/dark)
 - Autocomplete from your OurGroceries item history
 - First-run setup wizard
-- In-card settings (theme, list mode) accessible via gear icon
-- 30-second auto-refresh polling
+- In-card settings: any user can change the theme; list mode and locked list are admin-only
+- 30-second auto-refresh
 
 ## Prerequisites
 
-- [HACS](https://hacs.xyz/) installed in your Home Assistant instance
+- [HACS](https://hacs.xyz/) installed
 - An [OurGroceries](https://www.ourgroceries.com/) account
 
 ## Installation
 
-1. Open HACS in Home Assistant
-2. Go to **Integrations**
-3. Click the **+** button → search for **OurGroceries Kiosk**
-4. Click **Install**
-5. Restart Home Assistant
+1. HACS → **Integrations** → **+** → search **OurGroceries Kiosk** → **Install**
+2. Restart Home Assistant
 
-### Manual Installation
-
-Copy the `custom_components/ourgroceries_kiosk/` folder into your Home Assistant `custom_components/` directory and restart.
+**Manual:** Copy `custom_components/ourgroceries_kiosk/` into your `custom_components/` directory and restart.
 
 ## Setup
 
-1. Go to **Settings → Devices & Services → Add Integration**
-2. Search for **OurGroceries Kiosk**
+1. **Settings → Devices & Services → Add Integration**
+2. Search **OurGroceries Kiosk**
 3. Enter your OurGroceries email and password
-4. The integration validates your credentials and stores them securely
 
 ## Adding the Card
 
-1. Edit your dashboard
-2. **Add Card** → search for **OurGroceries Kiosk**
-3. The first-run wizard walks you through theme and list mode selection
+For a full-screen tablet experience, use a **Panel** view. This gives the card the entire viewport with no wasted space.
 
-### Card Configuration
+### Recommended Dashboard YAML
 
 ```yaml
-type: custom:ourgroceries-kiosk-card
-theme: citrus           # Theme name (default: citrus)
-list_mode: all          # 'single' or 'all' (default: all)
-locked_list: "Groceries" # Required if list_mode is 'single'
-default_list: "Groceries" # Optional — auto-open this list in 'all' mode
+kiosk_mode:
+  non_admin_settings:
+    kiosk: true
+  admin_settings:
+    kiosk: false
+views:
+  - type: panel
+    cards:
+      - type: custom:ourgroceries-kiosk-card
+        theme: citrus
+        list_mode: single
+        locked_list: "Groceries"
 ```
 
-### Available Themes
+`type: panel` makes the card fill the screen. The `kiosk_mode` block requires the separate [Kiosk Mode](https://github.com/NemesisRE/kiosk-mode) HACS frontend plugin (see below).
 
-`citrus` · `dark` · `light` · `berries` · `chestnut` · `festival` · `grapevine` · `ice` · `miami` · `old_glory` · `peacock` · `tangerine` · `vino` · `system` (auto light/dark)
+<!-- screenshot: full-screen tablet view with kiosk mode enabled -->
+![Tablet Screenshot](screenshots/tablet.png)
 
-## Changing Settings
+### Card Options
 
-Tap the **gear icon** in the card header to access settings at any time. You can change the theme, list mode, locked list, and default list.
+| Option | Values | Description |
+|---|---|---|
+| `theme` | `citrus`, `dark`, `light`, `berries`, `chestnut`, `festival`, `grapevine`, `ice`, `miami`, `old_glory`, `peacock`, `tangerine`, `vino`, `system` | Visual theme |
+| `list_mode` | `all`, `single` | Show all lists or lock to one |
+| `locked_list` | list name | Required when `list_mode: single` |
+| `default_list` | list name | Optional — auto-opens this list in `all` mode |
 
-## Kiosk Mode (Companion)
+## Settings
 
-For a clean full-screen experience on a wall tablet, install the separate [Kiosk Mode](https://github.com/NemesisRE/kiosk-mode) HACS frontend plugin.
+Tap the **gear icon** in the card header. All users can change the theme. List mode, locked list, and default list are only visible to HA admin users.
 
-**Recommended dashboard YAML:**
+## Kiosk Mode
+
+For a clean full-screen experience on a wall tablet, install [Kiosk Mode](https://github.com/NemesisRE/kiosk-mode) from HACS (it's a separate frontend plugin, not part of this integration).
 
 ```yaml
 kiosk_mode:
@@ -80,23 +86,19 @@ kiosk_mode:
     kiosk: false
 ```
 
-**Setup pattern:** Create a dedicated non-admin HA user for the tablet. Non-admin users see a clean full-screen view. Admin users retain the full HA chrome for editing.
+**How it works:** Create a dedicated non-admin HA user for the tablet. Non-admin users get a clean full-screen view with no HA sidebar or header. Admin users keep the full HA chrome for editing.
 
-**Escape hatch:** Append `?disable_km` to the dashboard URL to temporarily disable kiosk mode.
-
-## How It Works
-
-The integration communicates directly with the OurGroceries API using your stored credentials. The Lovelace card talks to the integration via Home Assistant WebSocket commands — no todo entities, shell commands, or external scripts are involved.
+**Escape hatch:** Append `?disable_km` to the URL to temporarily disable kiosk mode.
 
 ## Troubleshooting
 
-- **Card shows "No lists found"**: Check that your OurGroceries credentials are correct in Settings → Devices & Services → OurGroceries Kiosk.
-- **Changes don't appear on other devices**: The integration polls every 30 seconds. Changes made in the card are pushed immediately; changes from the OurGroceries app will appear within 30 seconds.
-- **Card not appearing in Add Card dialog**: Restart Home Assistant after installing the integration. The card JS is auto-registered as a Lovelace resource.
+- **"No lists found"** — Check your credentials in Settings → Devices & Services → OurGroceries Kiosk.
+- **Changes slow to appear** — The card polls every 30 seconds. Changes from the OurGroceries app appear on the next poll.
+- **Card not in Add Card dialog** — Restart HA after installing. The card JS is auto-registered as a Lovelace resource.
 
 ## Out of Scope
 
-- Recipe management (OurGroceries recipes are not supported)
+- Recipe management
 - Creating or deleting lists (use the OurGroceries app)
 - Barcode scanning
 

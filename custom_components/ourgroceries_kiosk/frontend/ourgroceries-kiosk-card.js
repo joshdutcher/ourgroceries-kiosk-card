@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '4.0.0';
+const OG_CARD_VERSION = '4.0.6';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -99,6 +99,7 @@ class OurGroceriesKioskCardEditor extends HTMLElement {
         .editor { padding: 16px; font-family: var(--paper-font-body1_-_font-family, sans-serif); }
         .row { margin-bottom: 12px; }
         label { display: block; font-weight: 500; margin-bottom: 4px; font-size: 14px; }
+        .hint { font-size: 12px; color: var(--secondary-text-color, #666); margin-top: 2px; }
         input, select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid var(--divider-color, #ccc); border-radius: 4px; font-size: 14px; background: var(--card-background-color, #fff); color: var(--primary-text-color, #000); }
       </style>
       <div class="editor">
@@ -113,6 +114,11 @@ class OurGroceriesKioskCardEditor extends HTMLElement {
         <div class="row" id="default-row" style="${showDefault ? '' : 'display:none'}">
           <label>Default List (optional)</label>
           <select id="default_list">${defaultListOptions}</select>
+        </div>
+        <div class="row">
+          <label>Admin PIN</label>
+          <input type="text" inputmode="numeric" id="admin_pin" value="${this._config.admin_pin || ''}" placeholder="e.g. 1234">
+          <div class="hint">Lets non-admin users unlock list settings on the card via the gear icon.</div>
         </div>
       </div>
     `;
@@ -148,6 +154,13 @@ class OurGroceriesKioskCardEditor extends HTMLElement {
       this._config.default_list = e.target.value;
       fire();
     });
+
+    root.getElementById('admin_pin').addEventListener('input', e => {
+      const val = e.target.value.replace(/\D/g, '');
+      e.target.value = val;
+      this._config.admin_pin = val;
+      fire();
+    });
   }
 }
 
@@ -177,12 +190,14 @@ class OurGroceriesKioskCard extends HTMLElement {
     this._view = 'loading'; // loading, wizard, lists, list, edit, categories, settings
     this._editingItem = null;
     this._editItemCategory = null;
+    this._settingsUnlocked = false;
     this._editNameDirty = false;
     this._autocompleteIdx = -1;
     this._statusTimeoutId = null;
     this._pollId = null;
     this._domBuilt = false;
-    this._HISTORY_KEY = 'og-kiosk-history';
+    this._wizardStep = 1;
+    this._HISTORY_KEY = 'og-kiosk-history-v4';
     this._MAX_HISTORY = 500;
 
     // System theme listener
@@ -207,8 +222,16 @@ class OurGroceriesKioskCard extends HTMLElement {
       list_mode: config.list_mode || 'all',
       locked_list: config.locked_list || '',
       default_list: config.default_list || '',
+      admin_pin: config.admin_pin || '',
     };
-    this._HISTORY_KEY = `og-kiosk-history-v4`;
+    // Overlay per-device localStorage overrides on top of YAML defaults
+    try {
+      const local = JSON.parse(localStorage.getItem('og-kiosk-device-config') || '{}');
+      if (local.theme) this._config.theme = local.theme;
+      if (local.list_mode) this._config.list_mode = local.list_mode;
+      if (local.locked_list !== undefined) this._config.locked_list = local.locked_list;
+      if (local.default_list !== undefined) this._config.default_list = local.default_list;
+    } catch (_) { /* ignore corrupt localStorage */ }
     if (this._domBuilt) this._applyTheme();
   }
 
@@ -251,7 +274,6 @@ class OurGroceriesKioskCard extends HTMLElement {
 
     // Determine initial view
     if (!this._config.theme || this._config.theme === '') {
-      this._view = 'wizard';
       this._wizardStep = 1;
       this._renderWizard();
     } else if (this._config.list_mode === 'single' && this._config.locked_list) {
@@ -259,7 +281,6 @@ class OurGroceriesKioskCard extends HTMLElement {
     } else if (this._config.default_list) {
       await this._navigateToListByName(this._config.default_list);
     } else {
-      this._view = 'lists';
       this._renderLists();
     }
 
@@ -271,7 +292,6 @@ class OurGroceriesKioskCard extends HTMLElement {
     if (list) {
       await this._openList(list.id, list.name);
     } else {
-      this._view = 'lists';
       this._renderLists();
     }
   }
@@ -336,21 +356,20 @@ class OurGroceriesKioskCard extends HTMLElement {
 
   _applyTheme() {
     const t = _resolveTheme(this._config.theme);
-    const host = this;
-    host.style.setProperty('--header-bg', t.headerBg);
-    host.style.setProperty('--category-bg', t.categoryBg);
-    host.style.setProperty('--page-bg', t.pageBg);
-    host.style.setProperty('--item-bg', t.itemBg);
-    host.style.setProperty('--text-primary', t.textPrimary);
-    host.style.setProperty('--text-on-accent', '#ffffff');
-    host.style.setProperty('--accent-color', t.headerBg);
-    host.style.setProperty('--crossed-off-bg', t.crossedOffBg);
-    host.style.setProperty('--crossed-off-text', t.crossedOffText);
-    host.style.setProperty('--badge-bg', t.headerBg);
+    this.style.setProperty('--header-bg', t.headerBg);
+    this.style.setProperty('--category-bg', t.categoryBg);
+    this.style.setProperty('--page-bg', t.pageBg);
+    this.style.setProperty('--item-bg', t.itemBg);
+    this.style.setProperty('--text-primary', t.textPrimary);
+    this.style.setProperty('--text-on-accent', '#ffffff');
+    this.style.setProperty('--accent-color', t.headerBg);
+    this.style.setProperty('--crossed-off-bg', t.crossedOffBg);
+    this.style.setProperty('--crossed-off-text', t.crossedOffText);
+    this.style.setProperty('--badge-bg', t.headerBg);
     // Divider: slightly darker/lighter than page bg
     const isDark = t.textPrimary === '#ffffff';
-    host.style.setProperty('--divider-color', isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)');
-    host.style.setProperty('--overlay-bg', isDark ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.45)');
+    this.style.setProperty('--divider-color', isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)');
+    this.style.setProperty('--overlay-bg', isDark ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.45)');
   }
 
   _getRoot() { return this.shadowRoot && this.shadowRoot.getElementById('og-root'); }
@@ -402,7 +421,6 @@ class OurGroceriesKioskCard extends HTMLElement {
   async _openList(listId, listName) {
     this._currentListId = listId;
     this._currentListName = listName;
-    this._view = 'list';
 
     try {
       const result = await this._ws('ourgroceries_kiosk/get_list_items', { list_id: listId });
@@ -419,6 +437,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   _renderListView() {
     const root = this._getRoot();
     if (!root) return;
+    this._view = 'list';
 
     const showBack = this._config.list_mode !== 'single';
 
@@ -498,8 +517,10 @@ class OurGroceriesKioskCard extends HTMLElement {
   }
 
   _renderListItems() {
-    const container = this._getRoot() && this._getRoot().querySelector('#og-items-container');
-    const crossedContainer = this._getRoot() && this._getRoot().querySelector('#og-crossed-container');
+    const root = this._getRoot();
+    if (!root) return;
+    const container = root.querySelector('#og-items-container');
+    const crossedContainer = root.querySelector('#og-crossed-container');
     if (!container || !crossedContainer) return;
 
     const active = this._items.filter(i => !i.crossed_off);
@@ -732,13 +753,13 @@ class OurGroceriesKioskCard extends HTMLElement {
     this._editingItem = { ...item };
     this._editNameDirty = false;
     this._editItemCategory = this._masterCategories[item.name.trim().toLowerCase()] || 'Uncategorized';
-    this._view = 'edit';
     this._renderEditView();
   }
 
   _renderEditView() {
     const root = this._getRoot();
     if (!root) return;
+    this._view = 'edit';
 
     root.innerHTML = `
       <div class="og-edit-header">
@@ -817,7 +838,6 @@ class OurGroceriesKioskCard extends HTMLElement {
       if (this._pendingRemoveId) this._removeItem(this._pendingRemoveId);
       this._hideConfirm();
       this._editingItem = null;
-      this._view = 'list';
       this._renderListView();
     });
     root.querySelector('#og-confirm-overlay').addEventListener('click', (e) => {
@@ -828,7 +848,6 @@ class OurGroceriesKioskCard extends HTMLElement {
   _handleEditBack() {
     if (this._editNameDirty && this._editingItem) this._handleEditNameSave();
     this._editingItem = null;
-    this._view = 'list';
     this._renderListView();
   }
 
@@ -927,7 +946,6 @@ class OurGroceriesKioskCard extends HTMLElement {
     root.innerHTML = html;
 
     root.querySelector('#og-cat-back').addEventListener('click', () => {
-      this._view = 'edit';
       this._renderEditView();
     });
 
@@ -948,7 +966,6 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._masterCategories[itemKey] = categoryName;
     }
 
-    this._view = 'edit';
     this._renderEditView();
 
     try {
@@ -994,6 +1011,8 @@ class OurGroceriesKioskCard extends HTMLElement {
     this._view = 'settings';
 
     const isAdmin = !!(this._hass && this._hass.user && this._hass.user.is_admin);
+    const hasPin = !!this._config.admin_pin;
+    const showAdmin = isAdmin || this._settingsUnlocked;
     const themeKeys = ['system', ...Object.keys(THEMES)];
 
     let html = `
@@ -1025,7 +1044,8 @@ class OurGroceriesKioskCard extends HTMLElement {
         </div>
     `;
 
-    if (isAdmin) {
+    if (showAdmin) {
+      // --- Admin list settings ---
       html += `
         <div class="og-setting-section">
           <div class="og-setting-label">List Mode</div>
@@ -1062,6 +1082,28 @@ class OurGroceriesKioskCard extends HTMLElement {
           </div>
         </div>
       `;
+    } else {
+      // --- Non-admin: show PIN unlock ---
+      html += `
+        <div class="og-setting-section">
+          <div class="og-setting-label">List Settings</div>
+          ${hasPin ? `
+            <div class="og-pin-unlock">
+              <svg viewBox="0 0 24 24" width="32" height="32" style="color:var(--crossed-off-text)"><path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/></svg>
+              <div class="og-pin-entry">
+                <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" id="og-pin-input" class="og-pin-input" placeholder="Enter PIN" autocomplete="off">
+                <button class="og-pin-submit" id="og-pin-submit">Unlock</button>
+              </div>
+              <div class="og-pin-error" id="og-pin-error" style="display:none">Incorrect PIN</div>
+            </div>
+          ` : `
+            <div class="og-pin-no-access">
+              <svg viewBox="0 0 24 24" width="32" height="32" style="color:var(--crossed-off-text)"><path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/></svg>
+              <span>An admin must configure list settings.</span>
+            </div>
+          `}
+        </div>
+      `;
     }
 
     html += `
@@ -1071,8 +1113,8 @@ class OurGroceriesKioskCard extends HTMLElement {
     root.innerHTML = html;
 
     root.querySelector('#og-settings-back').addEventListener('click', async () => {
-      // Admin selecting single mode must pick a locked list before leaving
-      if (isAdmin && this._config.list_mode === 'single' && !this._config.locked_list) {
+      // Admin/unlocked selecting single mode must pick a locked list before leaving
+      if (showAdmin && this._config.list_mode === 'single' && !this._config.locked_list) {
         const section = root.querySelector('#og-list-select-section');
         if (section) {
           section.style.display = '';
@@ -1083,14 +1125,15 @@ class OurGroceriesKioskCard extends HTMLElement {
         return;
       }
 
+      // Clear PIN unlock when leaving settings
+      this._settingsUnlocked = false;
+
       // Single-list mode: always navigate to the locked list
       if (this._config.list_mode === 'single' && this._config.locked_list) {
         await this._navigateToListByName(this._config.locked_list);
       } else if (prevView === 'list' && this._currentListId) {
-        this._view = 'list';
         this._renderListView();
       } else {
-        this._view = 'lists';
         this._renderLists();
       }
     });
@@ -1100,17 +1143,17 @@ class OurGroceriesKioskCard extends HTMLElement {
       btn.addEventListener('click', () => {
         this._config.theme = btn.dataset.theme;
         this._applyTheme();
-        this._fireConfigChanged();
+        this._saveLocalConfig();
         this._renderSettings();
       });
     });
 
-    if (isAdmin) {
+    if (showAdmin) {
       // List mode
       root.querySelectorAll('.og-setting-option').forEach(btn => {
         btn.addEventListener('click', () => {
           this._config.list_mode = btn.dataset.mode;
-          this._fireConfigChanged();
+          this._saveLocalConfig();
           this._renderSettings();
         });
       });
@@ -1123,7 +1166,7 @@ class OurGroceriesKioskCard extends HTMLElement {
         listSelectSection.querySelectorAll('.og-setting-list-option').forEach(btn => {
           btn.addEventListener('click', () => {
             this._config.locked_list = btn.dataset.listName;
-            this._fireConfigChanged();
+            this._saveLocalConfig();
             this._renderSettings();
           });
         });
@@ -1133,11 +1176,30 @@ class OurGroceriesKioskCard extends HTMLElement {
         defaultListSection.querySelectorAll('.og-setting-list-option').forEach(btn => {
           btn.addEventListener('click', () => {
             this._config.default_list = btn.dataset.listName;
-            this._fireConfigChanged();
+            this._saveLocalConfig();
             this._renderSettings();
           });
         });
       }
+
+    } else {
+      // PIN unlock for non-admin
+      const pinInput = root.querySelector('#og-pin-input');
+      const pinSubmit = root.querySelector('#og-pin-submit');
+      const pinError = root.querySelector('#og-pin-error');
+
+      const tryUnlock = () => {
+        if (pinInput && this._config.admin_pin && pinInput.value === this._config.admin_pin) {
+          this._settingsUnlocked = true;
+          this._renderSettings();
+        } else if (pinError) {
+          pinError.style.display = '';
+          if (pinInput) { pinInput.value = ''; pinInput.focus(); }
+        }
+      };
+
+      if (pinSubmit) pinSubmit.addEventListener('click', tryUnlock);
+      if (pinInput) pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
     }
   }
 
@@ -1146,6 +1208,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   _renderWizard() {
     const root = this._getRoot();
     if (!root) return;
+    this._view = 'wizard';
 
     if (this._wizardStep === 1) {
       const themeKeys = ['system', ...Object.keys(THEMES)];
@@ -1192,13 +1255,8 @@ class OurGroceriesKioskCard extends HTMLElement {
       root.querySelectorAll('.og-wizard-choice').forEach(btn => {
         btn.addEventListener('click', () => {
           this._config.list_mode = btn.dataset.mode;
-          if (btn.dataset.mode === 'single') {
-            this._wizardStep = 3;
-            this._renderWizard();
-          } else {
-            this._wizardStep = 3;
-            this._renderWizard();
-          }
+          this._wizardStep = 3;
+          this._renderWizard();
         });
       });
 
@@ -1227,7 +1285,6 @@ class OurGroceriesKioskCard extends HTMLElement {
             this._config.default_list = btn.dataset.name;
           }
           this._fireConfigChanged();
-          this._view = 'lists';
           this._initialLoad();
         });
       });
@@ -1240,6 +1297,17 @@ class OurGroceriesKioskCard extends HTMLElement {
       bubbles: true, composed: true,
     });
     this.dispatchEvent(ev);
+  }
+
+  _saveLocalConfig() {
+    try {
+      localStorage.setItem('og-kiosk-device-config', JSON.stringify({
+        theme: this._config.theme,
+        list_mode: this._config.list_mode,
+        locked_list: this._config.locked_list,
+        default_list: this._config.default_list,
+      }));
+    } catch (_) { /* localStorage full or unavailable */ }
   }
 
   /* ---- Autocomplete ---- */
@@ -1877,6 +1945,29 @@ class OurGroceriesKioskCard extends HTMLElement {
       .og-setting-list-option.active { border-color: var(--accent-color); color: var(--accent-color); font-weight: 600; }
       .og-setting-list-option:active { opacity: 0.7; }
 
+      /* ---- PIN ---- */
+      .og-pin-unlock, .og-pin-no-access {
+        display: flex; flex-direction: column; align-items: center;
+        gap: 12px; padding: 20px; text-align: center;
+        color: var(--crossed-off-text); font-size: 15px;
+      }
+      .og-pin-entry { display: flex; gap: 8px; width: 100%; max-width: 280px; }
+      .og-pin-input {
+        flex: 1; padding: 12px; border: 2px solid var(--divider-color);
+        border-radius: 8px; background: var(--item-bg); color: var(--text-primary);
+        font-size: 20px; text-align: center; letter-spacing: 4px;
+        outline: none;
+      }
+      .og-pin-input:focus { border-color: var(--accent-color); }
+      .og-pin-submit {
+        padding: 12px 20px; border: none; border-radius: 8px;
+        background: var(--accent-color); color: #fff;
+        font-size: 16px; font-weight: 600;
+        cursor: pointer; touch-action: manipulation;
+      }
+      .og-pin-submit:active { opacity: 0.7; }
+      .og-pin-error { color: #d44; font-size: 14px; font-weight: 500; }
+
       /* ---- Wizard ---- */
       .og-wizard {
         padding: 24px 16px;
@@ -1925,7 +2016,6 @@ window.customCards.push({
   name: 'OurGroceries Kiosk Card',
   description: 'Kitchen tablet kiosk card for managing OurGroceries lists.',
   preview: true,
-  documentationURL: '',
 });
 
 console.info(

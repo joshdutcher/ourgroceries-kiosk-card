@@ -61,14 +61,10 @@ class OurGroceriesAPI:
             })
         return result
 
-    async def add_item(
-        self, list_id: str, name: str, auto_category: bool = True
-    ) -> None:
+    async def add_item(self, list_id: str, name: str) -> None:
         """Add an item to a list."""
         client = await self._ensure_login()
-        await client.add_item_to_list(
-            list_id, name, auto_category=auto_category
-        )
+        await client.add_item_to_list(list_id, name, auto_category=True)
 
     async def remove_item(self, list_id: str, item_id: str) -> None:
         """Remove an item from a list."""
