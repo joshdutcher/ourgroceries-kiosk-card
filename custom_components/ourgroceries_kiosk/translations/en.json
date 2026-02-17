@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "OurGroceries Login",
+        "description": "Enter the email and password you use to log in to ourgroceries.com — not your Home Assistant account.",
+        "data": {
+          "username": "OurGroceries Email",
+          "password": "OurGroceries Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password. Please check your OurGroceries credentials."
+    },
+    "abort": {
+      "already_configured": "This OurGroceries account is already configured."
+    }
+  }
+}

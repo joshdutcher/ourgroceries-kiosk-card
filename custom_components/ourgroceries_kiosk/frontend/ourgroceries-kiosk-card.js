@@ -45,9 +45,19 @@ class OurGroceriesKioskCardEditor extends HTMLElement {
     super();
     this._config = {};
     this._hass = null;
+    this._lists = [];
+    this._listsFetched = false;
   }
 
-  set hass(hass) { this._hass = hass; }
+  set hass(hass) {
+    this._hass = hass;
+    if (!this._listsFetched && hass && hass.connection) {
+      this._listsFetched = true;
+      hass.connection.sendMessagePromise({ type: 'ourgroceries_kiosk/get_lists' })
+        .then(result => { this._lists = result.lists || []; this._render(); })
+        .catch(() => {});
+    }
+  }
 
   setConfig(config) {
     this._config = { ...config };
@@ -63,6 +73,27 @@ class OurGroceriesKioskCardEditor extends HTMLElement {
       `<option value="${t}" ${this._config.theme === t ? 'selected' : ''}>${t}</option>`
     ).join('');
 
+    // Determine current shopping list selection from config
+    const shoppingListValue = this._config.list_mode === 'single' && this._config.locked_list
+      ? this._config.locked_list : '__all__';
+    const showDefault = shoppingListValue === '__all__';
+
+    const sortedLists = [...this._lists].sort((a, b) => a.name.localeCompare(b.name));
+
+    const shoppingListOptions = [
+      `<option value="__all__" ${shoppingListValue === '__all__' ? 'selected' : ''}>All lists</option>`,
+      ...sortedLists.map(l =>
+        `<option value="${l.name}" ${shoppingListValue === l.name ? 'selected' : ''}>${l.name}</option>`
+      ),
+    ].join('');
+
+    const defaultListOptions = [
+      `<option value="" ${!this._config.default_list ? 'selected' : ''}>None</option>`,
+      ...sortedLists.map(l =>
+        `<option value="${l.name}" ${this._config.default_list === l.name ? 'selected' : ''}>${l.name}</option>`
+      ),
+    ].join('');
+
     root.innerHTML = `
       <style>
         .editor { padding: 16px; font-family: var(--paper-font-body1_-_font-family, sans-serif); }
@@ -76,19 +107,12 @@ class OurGroceriesKioskCardEditor extends HTMLElement {
           <select id="theme">${themeOptions}</select>
         </div>
         <div class="row">
-          <label>List Mode</label>
-          <select id="list_mode">
-            <option value="all" ${this._config.list_mode !== 'single' ? 'selected' : ''}>All lists</option>
-            <option value="single" ${this._config.list_mode === 'single' ? 'selected' : ''}>Single list</option>
-          </select>
+          <label>Shopping List</label>
+          <select id="shopping_list">${shoppingListOptions}</select>
         </div>
-        <div class="row">
-          <label>Locked List (for single mode)</label>
-          <input id="locked_list" value="${this._config.locked_list || ''}" placeholder="e.g. Groceries" />
-        </div>
-        <div class="row">
-          <label>Default List (for all mode)</label>
-          <input id="default_list" value="${this._config.default_list || ''}" placeholder="Optional" />
+        <div class="row" id="default-row" style="${showDefault ? '' : 'display:none'}">
+          <label>Default List (optional)</label>
+          <select id="default_list">${defaultListOptions}</select>
         </div>
       </div>
     `;
@@ -99,10 +123,31 @@ class OurGroceriesKioskCardEditor extends HTMLElement {
       }));
     };
 
-    root.getElementById('theme').addEventListener('change', e => { this._config.theme = e.target.value; fire(); });
-    root.getElementById('list_mode').addEventListener('change', e => { this._config.list_mode = e.target.value; fire(); });
-    root.getElementById('locked_list').addEventListener('input', e => { this._config.locked_list = e.target.value.trim(); fire(); });
-    root.getElementById('default_list').addEventListener('input', e => { this._config.default_list = e.target.value.trim(); fire(); });
+    root.getElementById('theme').addEventListener('change', e => {
+      this._config.theme = e.target.value;
+      fire();
+    });
+
+    root.getElementById('shopping_list').addEventListener('change', e => {
+      const value = e.target.value;
+      if (value === '__all__') {
+        this._config.list_mode = 'all';
+        this._config.locked_list = '';
+      } else {
+        this._config.list_mode = 'single';
+        this._config.locked_list = value;
+        this._config.default_list = '';
+      }
+      fire();
+      // Show/hide the default list row
+      const defaultRow = root.getElementById('default-row');
+      if (defaultRow) defaultRow.style.display = value === '__all__' ? '' : 'none';
+    });
+
+    root.getElementById('default_list').addEventListener('change', e => {
+      this._config.default_list = e.target.value;
+      fire();
+    });
   }
 }
 
