@@ -7,5 +7,5 @@
   "dependencies": [],
   "codeowners": [],
   "iot_class": "cloud_polling",
-  "documentation": "https://github.com/jdholtz/ourgroceries-kiosk-card"
+  "documentation": "https://github.com/joshdutcher/ourgroceries-kiosk-card"
 }

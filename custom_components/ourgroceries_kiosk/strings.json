@@ -3,10 +3,10 @@
     "step": {
       "user": {
         "title": "OurGroceries Login",
-        "description": "Enter your OurGroceries account credentials.",
+        "description": "Enter the email and password you use to log in to [OurGroceries](https://www.ourgroceries.com) (the app/website, not your Home Assistant account).",
         "data": {
-          "username": "Email",
-          "password": "Password"
+          "username": "OurGroceries Email",
+          "password": "OurGroceries Password"
         }
       }
     },
