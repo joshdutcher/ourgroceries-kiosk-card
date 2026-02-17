@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '4.0.6';
+const OG_CARD_VERSION = '4.0.7';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -47,6 +47,7 @@ class OurGroceriesKioskCardEditor extends HTMLElement {
     this._hass = null;
     this._lists = [];
     this._listsFetched = false;
+    this._rendered = false;
   }
 
   set hass(hass) {
@@ -61,10 +62,11 @@ class OurGroceriesKioskCardEditor extends HTMLElement {
 
   setConfig(config) {
     this._config = { ...config };
-    this._render();
+    if (!this._rendered) this._render();
   }
 
   _render() {
+    this._rendered = true;
     if (this.shadowRoot) this.shadowRoot.innerHTML = '';
     else this.attachShadow({ mode: 'open' });
 
