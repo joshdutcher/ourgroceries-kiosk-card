@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "OurGroceries Login",
+        "description": "Enter your OurGroceries account credentials.",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid username or password. Please check your OurGroceries credentials."
+    },
+    "abort": {
+      "already_configured": "This OurGroceries account is already configured."
+    }
+  }
+}
