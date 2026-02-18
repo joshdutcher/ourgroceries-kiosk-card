@@ -501,7 +501,11 @@ class OurGroceriesKioskCard extends HTMLElement {
     if (settingsBtn) settingsBtn.addEventListener('click', () => this._renderSettings());
 
     const addTrigger = root.querySelector('#og-add-trigger');
-    if (addTrigger) addTrigger.addEventListener('click', () => this._showAddView());
+    if (addTrigger) addTrigger.addEventListener('click', () => {
+      // Show immediate visual feedback, then render on next frame
+      addTrigger.classList.add('og-tapped');
+      requestAnimationFrame(() => this._showAddView());
+    });
   }
 
   _renderListItems() {
@@ -724,6 +728,39 @@ class OurGroceriesKioskCard extends HTMLElement {
     if (!root) return;
     this._view = 'add';
 
+    // Render the header + input immediately so the view appears instantly
+    root.innerHTML = `
+      <div class="og-header og-add-header">
+        <button class="og-header-back-btn" id="og-add-back" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+        </button>
+        <div class="og-add-input-wrapper">
+          <input id="og-add-input" type="text" placeholder="Find or add item" autocomplete="off" autocorrect="on" autocapitalize="sentences" />
+          <button id="og-add-clear" class="og-add-clear-btn hidden" aria-label="Clear">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="og-add-status" class="og-status hidden"></div>
+      <div id="og-add-items" class="og-add-view-body"></div>
+    `;
+
+    this._bindAddViewEvents();
+
+    // Auto-focus the input
+    const input = root.querySelector('#og-add-input');
+    if (input) setTimeout(() => input.focus(), 50);
+
+    // Populate item list on next frame so the header paints immediately
+    requestAnimationFrame(() => this._populateAddViewItems());
+  }
+
+  _populateAddViewItems() {
+    const root = this._getRoot();
+    if (!root || this._view !== 'add') return;
+    const container = root.querySelector('#og-add-items');
+    if (!container) return;
+
     const currentNamesLower = new Set(
       this._items.filter(i => !i.crossed_off).map(i => i.name.toLowerCase())
     );
@@ -753,29 +790,14 @@ class OurGroceriesKioskCard extends HTMLElement {
       `;
     }
 
-    root.innerHTML = `
-      <div class="og-header og-add-header">
-        <button class="og-header-back-btn" id="og-add-back" aria-label="Back">
-          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-        </button>
-        <div class="og-add-input-wrapper">
-          <input id="og-add-input" type="text" placeholder="Find or add item" autocomplete="off" autocorrect="on" autocapitalize="sentences" />
-          <button id="og-add-clear" class="og-add-clear-btn hidden" aria-label="Clear">
-            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-          </button>
-        </div>
-      </div>
-      <div id="og-add-status" class="og-status hidden"></div>
-      <div id="og-add-items" class="og-add-view-body">
-        ${itemsHtml}
-      </div>
-    `;
+    container.innerHTML = itemsHtml;
 
-    this._bindAddViewEvents();
-
-    // Auto-focus the input
-    const input = root.querySelector('#og-add-input');
-    if (input) setTimeout(() => input.focus(), 50);
+    // Bind item taps
+    container.querySelectorAll('.og-add-view-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._addItem(btn.dataset.name);
+      });
+    });
   }
 
   _bindAddViewEvents() {
@@ -823,12 +845,6 @@ class OurGroceriesKioskCard extends HTMLElement {
       });
     }
 
-    // Bind item taps
-    root.querySelectorAll('.og-add-view-item').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this._addItem(btn.dataset.name);
-      });
-    });
   }
 
   _filterAddViewItems(query) {
@@ -1804,6 +1820,8 @@ class OurGroceriesKioskCard extends HTMLElement {
         touch-action: manipulation;
       }
       .og-add-btn:active { opacity: 0.7; }
+      .og-add-item-row.og-tapped input { border-color: var(--accent-color); }
+      .og-add-item-row.og-tapped .og-add-btn { opacity: 0.7; }
 
       /* ---- Add view ---- */
       .og-add-header {
