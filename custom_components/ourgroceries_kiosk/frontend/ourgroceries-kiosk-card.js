@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.0';
+const OG_CARD_VERSION = '0.1.1';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -489,6 +489,15 @@ class OurGroceriesKioskCard extends HTMLElement {
         <div id="og-items-container" class="og-items-container"></div>
         <div id="og-crossed-container" class="og-crossed-container"></div>
       </div>
+      <div id="og-confirm-overlay" class="confirm-overlay hidden">
+        <div class="confirm-dialog">
+          <p id="og-confirm-text"></p>
+          <div class="confirm-buttons">
+            <button id="og-confirm-cancel" class="confirm-btn cancel-btn">Cancel</button>
+            <button id="og-confirm-ok" class="confirm-btn remove-btn">Delete</button>
+          </div>
+        </div>
+      </div>
     `;
 
     root.innerHTML = html;
@@ -627,7 +636,14 @@ class OurGroceriesKioskCard extends HTMLElement {
 
     // Bind crossed-off action buttons
     const deleteBtn = crossedContainer.querySelector('#og-delete-crossed');
-    if (deleteBtn) deleteBtn.addEventListener('click', () => this._deleteCrossedOff());
+    if (deleteBtn) deleteBtn.addEventListener('click', () => {
+      const count = this._items.filter(i => i.crossed_off).length;
+      this._showListConfirm(
+        `Delete ${count} crossed-off item${count !== 1 ? 's' : ''}?`,
+        'Delete',
+        () => this._deleteCrossedOff(),
+      );
+    });
 
     const uncrossBtn = crossedContainer.querySelector('#og-uncross-all');
     if (uncrossBtn) uncrossBtn.addEventListener('click', () => this._uncrossOffAll());
@@ -752,8 +768,10 @@ class OurGroceriesKioskCard extends HTMLElement {
           </button>
         </div>
       </div>
-      <div id="og-add-items" class="og-add-view-body"></div>
-      <div id="og-add-status" class="og-snackbar hidden"></div>
+      <div class="og-add-view-body-wrapper">
+        <div id="og-add-toast" class="og-add-toast hidden"></div>
+        <div id="og-add-items" class="og-add-view-body"></div>
+      </div>
     `;
 
     this._bindAddViewEvents();
@@ -930,24 +948,41 @@ class OurGroceriesKioskCard extends HTMLElement {
 
   _showAddViewStatus(message, editItemId) {
     const root = this._getRoot();
-    const el = root && root.querySelector('#og-add-status');
+    const el = root && root.querySelector('#og-add-toast');
     if (!el) return;
     if (this._statusTimeoutId) clearTimeout(this._statusTimeoutId);
     el.innerHTML = `
-      <span class="og-snackbar-text">${this._escHtml(message)}</span>
-      ${editItemId ? `<button class="og-snackbar-action" id="og-snackbar-edit">Edit</button>` : ''}
+      <span class="og-add-toast-text">${this._escHtml(message)}</span>
+      ${editItemId ? `<button class="og-add-toast-action" id="og-toast-edit">Edit</button>` : ''}
     `;
-    el.className = 'og-snackbar';
+    el.classList.remove('hidden');
+    el.classList.add('visible');
+    // Prevent any tap on the toast from stealing focus/closing keyboard
+    el.addEventListener('mousedown', (e) => e.preventDefault());
     if (editItemId) {
-      const editBtn = el.querySelector('#og-snackbar-edit');
-      if (editBtn) editBtn.addEventListener('click', () => {
-        el.className = 'og-snackbar hidden';
-        if (this._statusTimeoutId) clearTimeout(this._statusTimeoutId);
-        this._editReturnView = 'add';
-        this._showEditView(editItemId);
-      });
+      const editBtn = el.querySelector('#og-toast-edit');
+      if (editBtn) {
+        editBtn.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          el.classList.remove('visible');
+          el.classList.add('hidden');
+          if (this._statusTimeoutId) clearTimeout(this._statusTimeoutId);
+          this._editReturnView = 'add';
+          this._showEditView(editItemId);
+        });
+        editBtn.addEventListener('click', () => {
+          el.classList.remove('visible');
+          el.classList.add('hidden');
+          if (this._statusTimeoutId) clearTimeout(this._statusTimeoutId);
+          this._editReturnView = 'add';
+          this._showEditView(editItemId);
+        });
+      }
     }
-    this._statusTimeoutId = setTimeout(() => el.className = 'og-snackbar hidden', 3000);
+    this._statusTimeoutId = setTimeout(() => {
+      el.classList.remove('visible');
+      el.classList.add('hidden');
+    }, 3000);
   }
 
   /* ---- Edit View ---- */
@@ -1193,7 +1228,35 @@ class OurGroceriesKioskCard extends HTMLElement {
     }
   }
 
-  /* ---- Confirm dialog ---- */
+  /* ---- Generic list-view confirm dialog ---- */
+
+  _showListConfirm(message, actionLabel, onConfirm) {
+    const root = this._getRoot();
+    const overlay = root && root.querySelector('#og-confirm-overlay');
+    const text = root && root.querySelector('#og-confirm-text');
+    const okBtn = root && root.querySelector('#og-confirm-ok');
+    const cancelBtn = root && root.querySelector('#og-confirm-cancel');
+    if (!overlay || !text || !okBtn || !cancelBtn) return;
+    text.textContent = message;
+    okBtn.textContent = actionLabel;
+    overlay.classList.remove('hidden');
+    // Replace listeners with fresh ones
+    const newOk = okBtn.cloneNode(true);
+    okBtn.parentNode.replaceChild(newOk, okBtn);
+    const newCancel = cancelBtn.cloneNode(true);
+    cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+    newOk.addEventListener('click', () => { onConfirm(); this._hideListConfirm(); });
+    newCancel.addEventListener('click', () => this._hideListConfirm());
+    overlay.onclick = (e) => { if (e.target === overlay) this._hideListConfirm(); };
+  }
+
+  _hideListConfirm() {
+    const root = this._getRoot();
+    const overlay = root && root.querySelector('#og-confirm-overlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
+  /* ---- Edit-view confirm dialog ---- */
 
   _showConfirm(itemId, name) {
     this._pendingRemoveId = itemId;
@@ -1235,8 +1298,12 @@ class OurGroceriesKioskCard extends HTMLElement {
         <span style="width:48px"></span>
       </div>
       <div class="og-settings-body">
+    const themeName = this._config.theme === 'system'
+      ? 'SYSTEM'
+      : (this._config.theme || 'citrus').replace(/_/g, ' ').toUpperCase();
+    html += `
         <div class="og-setting-section">
-          <div class="og-setting-label">Theme</div>
+          <div class="og-setting-label">THEME <span class="og-theme-name" id="og-theme-name">${this._escHtml(themeName)}</span></div>
           <div class="og-theme-grid">
     `;
 
@@ -1250,12 +1317,8 @@ class OurGroceriesKioskCard extends HTMLElement {
       `;
     }
 
-    const themeName = this._config.theme === 'system'
-      ? 'System'
-      : (this._config.theme || 'citrus').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     html += `
           </div>
-          <div class="og-theme-name" id="og-theme-name">${this._escHtml(themeName)}</div>
         </div>
     `;
 
@@ -1301,20 +1364,19 @@ class OurGroceriesKioskCard extends HTMLElement {
       // --- Non-admin: show PIN unlock ---
       html += `
         <div class="og-setting-section">
-          <div class="og-setting-label">List Settings</div>
+          <div class="og-setting-label">Admin Settings</div>
           ${hasPin ? `
             <div class="og-pin-unlock">
-              <svg viewBox="0 0 24 24" width="32" height="32" style="color:var(--crossed-off-text)"><path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/></svg>
-              <div class="og-pin-entry">
-                <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" id="og-pin-input" class="og-pin-input" placeholder="Enter PIN" autocomplete="off">
+              <div class="og-pin-hint">Enter PIN to unlock</div>
+              <div class="og-pin-row">
+                <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" id="og-pin-input" class="og-pin-input" placeholder="PIN" autocomplete="off">
                 <button class="og-pin-submit" id="og-pin-submit">Unlock</button>
               </div>
               <div class="og-pin-error" id="og-pin-error" style="display:none">Incorrect PIN</div>
             </div>
           ` : `
             <div class="og-pin-no-access">
-              <svg viewBox="0 0 24 24" width="32" height="32" style="color:var(--crossed-off-text)"><path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2z"/></svg>
-              <span>An admin must configure list settings.</span>
+              <span>An admin must configure these settings.</span>
             </div>
           `}
         </div>
@@ -1909,6 +1971,30 @@ class OurGroceriesKioskCard extends HTMLElement {
         touch-action: manipulation;
       }
       .og-add-clear-btn:active { opacity: 0.7; }
+      .og-add-view-body-wrapper {
+        position: relative; flex: 1; min-height: 0;
+      }
+      .og-add-toast {
+        position: absolute; top: 6px; left: 12px; right: 12px;
+        z-index: 110;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 12px 16px;
+        background: var(--snackbar-bg, #323232); color: var(--snackbar-text, #fff);
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+        font-size: 15px;
+        opacity: 1; transition: opacity 0.25s ease;
+        pointer-events: auto;
+      }
+      .og-add-toast.hidden { opacity: 0; pointer-events: none; }
+      .og-add-toast.visible { opacity: 1; }
+      .og-add-toast-text { flex: 1; }
+      .og-add-toast-action {
+        background: none; border: none; color: var(--accent-color, #4caf50);
+        font-size: 15px; font-weight: 700; text-transform: uppercase;
+        cursor: pointer; padding: 0 0 0 16px; touch-action: manipulation;
+      }
+      .og-add-toast-action:active { opacity: 0.7; }
       .og-add-view-body {
         max-height: 75vh; overflow-y: auto;
         -webkit-overflow-scrolling: touch;
@@ -2192,9 +2278,8 @@ class OurGroceriesKioskCard extends HTMLElement {
         gap: 8px;
       }
       .og-theme-name {
-        text-align: center; margin-top: 10px;
-        font-size: 15px; font-weight: 500;
-        color: var(--text-primary); opacity: 0.7;
+        font-weight: 400; opacity: 0.6;
+        margin-left: 4px;
       }
       .og-theme-grid.large {
         grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
@@ -2239,27 +2324,31 @@ class OurGroceriesKioskCard extends HTMLElement {
       .og-setting-list-option:active { opacity: 0.7; }
 
       /* ---- PIN ---- */
-      .og-pin-unlock, .og-pin-no-access {
-        display: flex; flex-direction: column; align-items: center;
-        gap: 12px; padding: 20px; text-align: center;
+      .og-pin-unlock {
+        display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+      }
+      .og-pin-no-access {
         color: var(--crossed-off-text); font-size: 15px;
       }
-      .og-pin-entry { display: flex; gap: 8px; width: 100%; max-width: 280px; }
+      .og-pin-hint {
+        font-size: 14px; color: var(--crossed-off-text);
+      }
+      .og-pin-row { display: flex; gap: 8px; align-items: center; }
       .og-pin-input {
-        flex: 1; padding: 12px; border: 2px solid var(--divider-color);
+        width: 100px; padding: 10px; border: 2px solid var(--divider-color);
         border-radius: 8px; background: var(--item-bg); color: var(--text-primary);
-        font-size: 20px; text-align: center; letter-spacing: 4px;
+        font-size: 18px; text-align: center; letter-spacing: 4px;
         outline: none;
       }
       .og-pin-input:focus { border-color: var(--accent-color); }
       .og-pin-submit {
-        padding: 12px 20px; border: none; border-radius: 8px;
+        padding: 10px 18px; border: none; border-radius: 8px;
         background: var(--accent-color); color: #fff;
-        font-size: 16px; font-weight: 600;
+        font-size: 15px; font-weight: 600;
         cursor: pointer; touch-action: manipulation;
       }
       .og-pin-submit:active { opacity: 0.7; }
-      .og-pin-error { color: #d44; font-size: 14px; font-weight: 500; }
+      .og-pin-error { color: #d44; font-size: 14px; font-weight: 500; margin-top: 2px; }
 
       /* ---- Wizard ---- */
       .og-wizard {
