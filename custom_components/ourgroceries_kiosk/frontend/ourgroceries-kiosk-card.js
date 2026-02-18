@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '4.0.7';
+const OG_CARD_VERSION = '4.0.8';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -185,6 +185,7 @@ class OurGroceriesKioskCard extends HTMLElement {
     this._masterCategories = {};
     this._allCategories = [];
     this._categoryNameToId = {};
+    this._categoryIdMap = {};
 
     // State
     this._currentListId = null;
@@ -269,6 +270,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._masterCategories = catResult.master_categories || {};
       this._allCategories = catResult.categories || [];
       this._categoryNameToId = catResult.category_name_to_id || {};
+      this._categoryIdMap = catResult.category_id_map || {};
     } catch (err) {
       console.error('OG Kiosk: initial load failed', err);
       this._lists = [];
@@ -319,6 +321,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._masterCategories = catResult.master_categories || {};
       this._allCategories = catResult.categories || [];
       this._categoryNameToId = catResult.category_name_to_id || {};
+      this._categoryIdMap = catResult.category_id_map || {};
 
       if (this._view === 'lists') this._renderLists();
       else if (this._view === 'list' && this._currentListId) {
@@ -616,7 +619,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   _groupByCategory(items) {
     const groups = {};
     for (const item of items) {
-      const cat = this._masterCategories[item.name.trim().toLowerCase()] || 'Uncategorized';
+      const cat = this._masterCategories[item.name.trim().toLowerCase()] || (item.category_id && this._categoryIdMap[item.category_id]) || 'Uncategorized';
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(item);
     }
@@ -754,7 +757,7 @@ class OurGroceriesKioskCard extends HTMLElement {
     if (!item) return;
     this._editingItem = { ...item };
     this._editNameDirty = false;
-    this._editItemCategory = this._masterCategories[item.name.trim().toLowerCase()] || 'Uncategorized';
+    this._editItemCategory = this._masterCategories[item.name.trim().toLowerCase()] || (item.category_id && this._categoryIdMap[item.category_id]) || 'Uncategorized';
     this._renderEditView();
   }
 
