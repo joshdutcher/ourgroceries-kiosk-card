@@ -126,6 +126,31 @@ class OurGroceriesAPI:
             "master_items": master_item_names,
         }
 
+    async def get_item_list_map(self) -> dict:
+        """Return a map of lowercase item names to lists they appear on (non-crossed-off only)."""
+        client = await self._ensure_login()
+        data = await client.get_my_lists()
+        lists = data.get("shoppingLists", [])
+
+        item_map: dict[str, list[str]] = {}
+        for sl in lists:
+            list_id = sl.get("id", "")
+            list_name = sl.get("name", "")
+            if not list_id:
+                continue
+            list_data = await client.get_list_items(list_id)
+            items = list_data.get("list", {}).get("items", [])
+            for item in items:
+                if item.get("crossedOff", False):
+                    continue
+                name = item.get("value", "").strip().lower()
+                if name:
+                    item_map.setdefault(name, [])
+                    if list_name not in item_map[name]:
+                        item_map[name].append(list_name)
+
+        return item_map
+
     async def set_item_category(
         self,
         item_name: str,

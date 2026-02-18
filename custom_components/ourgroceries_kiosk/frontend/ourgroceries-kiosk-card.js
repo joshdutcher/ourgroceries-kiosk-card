@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.0.12';
+const OG_CARD_VERSION = '0.1.0';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -187,6 +187,7 @@ class OurGroceriesKioskCard extends HTMLElement {
     this._categoryNameToId = {};
     this._categoryIdMap = {};
     this._masterItems = [];
+    this._itemListMap = {};
 
     // State
     this._currentListId = null;
@@ -196,10 +197,12 @@ class OurGroceriesKioskCard extends HTMLElement {
     this._editItemCategory = null;
     this._settingsUnlocked = false;
     this._editNameDirty = false;
+    this._editReturnView = null;
     this._autocompleteIdx = -1;
     this._statusTimeoutId = null;
     this._pollId = null;
     this._domBuilt = false;
+    this._addViewHtmlCache = null;
     this._wizardStep = 1;
     this._HISTORY_KEY = 'og-kiosk-history-v4';
     this._MAX_HISTORY = 500;
@@ -263,9 +266,10 @@ class OurGroceriesKioskCard extends HTMLElement {
 
   async _initialLoad() {
     try {
-      const [listsResult, catResult] = await Promise.all([
+      const [listsResult, catResult, itemListMap] = await Promise.all([
         this._ws('ourgroceries_kiosk/get_lists'),
         this._ws('ourgroceries_kiosk/get_categories'),
+        this._ws('ourgroceries_kiosk/get_item_list_map').catch(() => ({})),
       ]);
       this._lists = listsResult.lists || [];
       this._masterCategories = catResult.master_categories || {};
@@ -273,6 +277,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._categoryNameToId = catResult.category_name_to_id || {};
       this._categoryIdMap = catResult.category_id_map || {};
       this._masterItems = catResult.master_items || [];
+      this._itemListMap = itemListMap || {};
     } catch (err) {
       console.error('OG Kiosk: initial load failed', err);
       this._lists = [];
@@ -315,9 +320,10 @@ class OurGroceriesKioskCard extends HTMLElement {
 
   async _poll() {
     try {
-      const [listsResult, catResult] = await Promise.all([
+      const [listsResult, catResult, itemListMap] = await Promise.all([
         this._ws('ourgroceries_kiosk/get_lists'),
         this._ws('ourgroceries_kiosk/get_categories'),
+        this._ws('ourgroceries_kiosk/get_item_list_map').catch(() => ({})),
       ]);
       this._lists = listsResult.lists || [];
       this._masterCategories = catResult.master_categories || {};
@@ -325,6 +331,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._categoryNameToId = catResult.category_name_to_id || {};
       this._categoryIdMap = catResult.category_id_map || {};
       this._masterItems = catResult.master_items || [];
+      this._itemListMap = itemListMap || {};
 
       if (this._view === 'lists') this._renderLists();
       else if (this._view === 'list' && this._currentListId) {
@@ -384,6 +391,8 @@ class OurGroceriesKioskCard extends HTMLElement {
     const isDark = t.textPrimary === '#ffffff';
     this.style.setProperty('--divider-color', isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)');
     this.style.setProperty('--overlay-bg', isDark ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.45)');
+    this.style.setProperty('--snackbar-bg', isDark ? '#f5f5f5' : '#323232');
+    this.style.setProperty('--snackbar-text', isDark ? '#333' : '#fff');
   }
 
   _getRoot() { return this.shadowRoot && this.shadowRoot.getElementById('og-root'); }
@@ -509,6 +518,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   }
 
   _renderListItems() {
+    this._prebuildAddViewHtml();
     const root = this._getRoot();
     if (!root) return;
     const container = root.querySelector('#og-items-container');
@@ -548,7 +558,7 @@ class OurGroceriesKioskCard extends HTMLElement {
     }
 
     if (active.length === 0 && crossedOff.length === 0) {
-      html = '<div class="og-empty">List is empty</div>';
+      html = '<div class="og-empty">Tap <span style="color:var(--accent-color);font-weight:700">+</span> to add an item.</div>';
     }
 
     container.innerHTML = html;
@@ -685,13 +695,14 @@ class OurGroceriesKioskCard extends HTMLElement {
       await this._ws('ourgroceries_kiosk/add_item', { list_id: this._currentListId, name });
       this._addToHistory(name);
       if (this._view === 'add') {
-        this._showAddViewStatus(`Added "${name}"`);
-        // Silently refresh items so "on list" indicators update
+        // Refresh items so "on list" indicators update and we can find the new item's ID
         try {
           const result = await this._ws('ourgroceries_kiosk/get_list_items', { list_id: this._currentListId });
           this._items = result.items || [];
           this._refreshAddViewItems();
         } catch (_) {}
+        const added = this._items.find(i => i.name.toLowerCase() === name.toLowerCase() && !i.crossed_off);
+        this._showAddViewStatus(`Added "${name}"`, added ? added.id : null);
       } else {
         this._showStatus(`Added "${name}"`, 'success');
         await this._refreshListItems();
@@ -741,8 +752,8 @@ class OurGroceriesKioskCard extends HTMLElement {
           </button>
         </div>
       </div>
-      <div id="og-add-status" class="og-status hidden"></div>
       <div id="og-add-items" class="og-add-view-body"></div>
+      <div id="og-add-status" class="og-snackbar hidden"></div>
     `;
 
     this._bindAddViewEvents();
@@ -755,17 +766,10 @@ class OurGroceriesKioskCard extends HTMLElement {
     requestAnimationFrame(() => this._populateAddViewItems());
   }
 
-  _populateAddViewItems() {
-    const root = this._getRoot();
-    if (!root || this._view !== 'add') return;
-    const container = root.querySelector('#og-add-items');
-    if (!container) return;
-
+  _buildAddViewHtml() {
     const currentNamesLower = new Set(
       this._items.filter(i => !i.crossed_off).map(i => i.name.toLowerCase())
     );
-
-    // Build deduplicated master item list
     const seen = new Set();
     const allItems = [];
     for (const name of this._masterItems) {
@@ -775,22 +779,45 @@ class OurGroceriesKioskCard extends HTMLElement {
         allItems.push(name.trim());
       }
     }
-    allItems.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-
-    let itemsHtml = '';
+    let html = '';
     for (const name of allItems) {
-      const onList = currentNamesLower.has(name.toLowerCase());
-      itemsHtml += `
+      const key = name.toLowerCase();
+      const lists = this._itemListMap[key] || [];
+      let subtitle = '';
+      if (lists.length === 1) {
+        subtitle = `<span class="og-add-view-on-list">On ${this._escHtml(lists[0])} list</span>`;
+      } else if (lists.length > 1) {
+        subtitle = `<span class="og-add-view-on-list">On lists: ${lists.map(l => this._escHtml(l)).join(', ')}</span>`;
+      }
+      html += `
         <button class="og-add-view-item" data-name="${this._escAttr(name)}">
           <div class="og-add-view-item-text">
             <span class="og-add-view-item-name">${this._escHtml(name)}</span>
-            ${onList ? `<span class="og-add-view-on-list">On ${this._escHtml(this._currentListName)} list</span>` : ''}
+            ${subtitle}
           </div>
         </button>
       `;
     }
+    return html;
+  }
 
-    container.innerHTML = itemsHtml;
+  _prebuildAddViewHtml() {
+    requestAnimationFrame(() => {
+      this._addViewHtmlCache = this._buildAddViewHtml();
+    });
+  }
+
+  _invalidateAddViewCache() {
+    this._addViewHtmlCache = null;
+  }
+
+  _populateAddViewItems() {
+    const root = this._getRoot();
+    if (!root || this._view !== 'add') return;
+    const container = root.querySelector('#og-add-items');
+    if (!container) return;
+
+    container.innerHTML = this._addViewHtmlCache || this._buildAddViewHtml();
 
     // Bind item taps
     container.querySelectorAll('.og-add-view-item').forEach(btn => {
@@ -869,41 +896,58 @@ class OurGroceriesKioskCard extends HTMLElement {
   }
 
   _refreshAddViewItems() {
+    this._invalidateAddViewCache();
     const root = this._getRoot();
     if (!root || this._view !== 'add') return;
     const container = root.querySelector('#og-add-items');
     if (!container) return;
 
-    const currentNamesLower = new Set(
-      this._items.filter(i => !i.crossed_off).map(i => i.name.toLowerCase())
-    );
-
     container.querySelectorAll('.og-add-view-item').forEach(btn => {
       const name = btn.dataset.name || '';
-      const onList = currentNamesLower.has(name.toLowerCase());
+      const key = name.toLowerCase();
+      const lists = this._itemListMap[key] || [];
       const subtitle = btn.querySelector('.og-add-view-on-list');
-      if (onList && !subtitle) {
+
+      if (lists.length > 0 && !subtitle) {
         const textDiv = btn.querySelector('.og-add-view-item-text');
         if (textDiv) {
           const span = document.createElement('span');
           span.className = 'og-add-view-on-list';
-          span.textContent = `On ${this._currentListName} list`;
+          span.textContent = lists.length === 1
+            ? `On ${lists[0]} list`
+            : `On lists: ${lists.join(', ')}`;
           textDiv.appendChild(span);
         }
-      } else if (!onList && subtitle) {
+      } else if (lists.length > 0 && subtitle) {
+        subtitle.textContent = lists.length === 1
+          ? `On ${lists[0]} list`
+          : `On lists: ${lists.join(', ')}`;
+      } else if (lists.length === 0 && subtitle) {
         subtitle.remove();
       }
     });
   }
 
-  _showAddViewStatus(message) {
+  _showAddViewStatus(message, editItemId) {
     const root = this._getRoot();
     const el = root && root.querySelector('#og-add-status');
     if (!el) return;
     if (this._statusTimeoutId) clearTimeout(this._statusTimeoutId);
-    el.textContent = message;
-    el.className = 'og-status success';
-    this._statusTimeoutId = setTimeout(() => el.classList.add('hidden'), 2500);
+    el.innerHTML = `
+      <span class="og-snackbar-text">${this._escHtml(message)}</span>
+      ${editItemId ? `<button class="og-snackbar-action" id="og-snackbar-edit">Edit</button>` : ''}
+    `;
+    el.className = 'og-snackbar';
+    if (editItemId) {
+      const editBtn = el.querySelector('#og-snackbar-edit');
+      if (editBtn) editBtn.addEventListener('click', () => {
+        el.className = 'og-snackbar hidden';
+        if (this._statusTimeoutId) clearTimeout(this._statusTimeoutId);
+        this._editReturnView = 'add';
+        this._showEditView(editItemId);
+      });
+    }
+    this._statusTimeoutId = setTimeout(() => el.className = 'og-snackbar hidden', 3000);
   }
 
   /* ---- Edit View ---- */
@@ -1009,7 +1053,13 @@ class OurGroceriesKioskCard extends HTMLElement {
   _handleEditBack() {
     if (this._editNameDirty && this._editingItem) this._handleEditNameSave();
     this._editingItem = null;
-    this._renderListView();
+    const returnToAdd = this._editReturnView === 'add';
+    this._editReturnView = null;
+    if (returnToAdd) {
+      this._showAddView();
+    } else {
+      this._renderListView();
+    }
   }
 
   async _handleEditNameSave() {
@@ -1200,8 +1250,12 @@ class OurGroceriesKioskCard extends HTMLElement {
       `;
     }
 
+    const themeName = this._config.theme === 'system'
+      ? 'System'
+      : (this._config.theme || 'citrus').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     html += `
           </div>
+          <div class="og-theme-name" id="og-theme-name">${this._escHtml(themeName)}</div>
         </div>
     `;
 
@@ -1566,12 +1620,16 @@ class OurGroceriesKioskCard extends HTMLElement {
       pool.push({ text: display });
     };
 
+    // Current list items first
     for (const item of this._items) {
       if (!item.crossed_off) addEntry(this._parseQuantity(item.name.trim()).baseName);
     }
-    for (const key of Object.keys(this._masterCategories)) {
+    // Master items in server frequency order (most commonly added first)
+    for (const name of this._masterItems) {
+      const key = name.trim().toLowerCase();
       addEntry(historyDisplay[key] || this._titleCase(key));
     }
+    // Local history as fallback
     for (const h of history) addEntry(h);
     return pool;
   }
@@ -1681,6 +1739,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       .hidden { display: none !important; }
 
       .og-root {
+        position: relative;
         display: flex;
         flex-direction: column;
         min-height: 200px;
@@ -1943,6 +2002,25 @@ class OurGroceriesKioskCard extends HTMLElement {
       .og-status.success { color: #4caf50; }
       .og-status.error { color: #d44; }
 
+      /* ---- Snackbar ---- */
+      .og-snackbar {
+        position: absolute; bottom: 0; left: 0; right: 0;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 16px;
+        background: var(--snackbar-bg, #323232); color: var(--snackbar-text, #fff);
+        font-size: 14px;
+        z-index: 100;
+        transition: transform 0.2s ease, opacity 0.2s ease;
+      }
+      .og-snackbar.hidden { transform: translateY(100%); opacity: 0; pointer-events: none; }
+      .og-snackbar-text { flex: 1; }
+      .og-snackbar-action {
+        background: none; border: none; color: var(--accent-color, #4caf50);
+        font-size: 14px; font-weight: 700; text-transform: uppercase;
+        cursor: pointer; padding: 0 0 0 16px; touch-action: manipulation;
+      }
+      .og-snackbar-action:active { opacity: 0.7; }
+
       /* ---- Empty state ---- */
       .og-empty {
         padding: 40px 16px; text-align: center;
@@ -2112,6 +2190,11 @@ class OurGroceriesKioskCard extends HTMLElement {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
         gap: 8px;
+      }
+      .og-theme-name {
+        text-align: center; margin-top: 10px;
+        font-size: 15px; font-weight: 500;
+        color: var(--text-primary); opacity: 0.7;
       }
       .og-theme-grid.large {
         grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));

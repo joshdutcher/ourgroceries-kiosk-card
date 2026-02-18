@@ -20,6 +20,7 @@ from .const import (
     WS_GET_LIST_ITEMS,
     WS_GET_LISTS,
     WS_REMOVE_ITEM,
+    WS_GET_ITEM_LIST_MAP,
     WS_SET_ITEM_CATEGORY,
     WS_TOGGLE_CROSSED_OFF,
     WS_UPDATE_ITEM,
@@ -255,6 +256,18 @@ def _register_websocket_handlers(hass: HomeAssistant) -> None:
                 msg["id"], "set_item_category_failed", str(err)
             )
 
+    @websocket_api.websocket_command({vol.Required("type"): WS_GET_ITEM_LIST_MAP})
+    @websocket_api.async_response
+    async def ws_get_item_list_map(hass, connection, msg):
+        api = _get_api(hass)
+        try:
+            data = await api.get_item_list_map()
+            connection.send_result(msg["id"], data)
+        except Exception as err:
+            connection.send_error(
+                msg["id"], "get_item_list_map_failed", str(err)
+            )
+
     # Register all handlers
     websocket_api.async_register_command(hass, ws_get_lists)
     websocket_api.async_register_command(hass, ws_get_list_items)
@@ -265,3 +278,4 @@ def _register_websocket_handlers(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_delete_crossed_off)
     websocket_api.async_register_command(hass, ws_get_categories)
     websocket_api.async_register_command(hass, ws_set_item_category)
+    websocket_api.async_register_command(hass, ws_get_item_list_map)
