@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '4.0.9';
+const OG_CARD_VERSION = '5.0.0';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -186,11 +186,12 @@ class OurGroceriesKioskCard extends HTMLElement {
     this._allCategories = [];
     this._categoryNameToId = {};
     this._categoryIdMap = {};
+    this._masterItems = [];
 
     // State
     this._currentListId = null;
     this._currentListName = '';
-    this._view = 'loading'; // loading, wizard, lists, list, edit, categories, settings
+    this._view = 'loading'; // loading, wizard, lists, list, add, edit, categories, settings
     this._editingItem = null;
     this._editItemCategory = null;
     this._settingsUnlocked = false;
@@ -271,6 +272,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._allCategories = catResult.categories || [];
       this._categoryNameToId = catResult.category_name_to_id || {};
       this._categoryIdMap = catResult.category_id_map || {};
+      this._masterItems = catResult.master_items || [];
     } catch (err) {
       console.error('OG Kiosk: initial load failed', err);
       this._lists = [];
@@ -322,10 +324,17 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._allCategories = catResult.categories || [];
       this._categoryNameToId = catResult.category_name_to_id || {};
       this._categoryIdMap = catResult.category_id_map || {};
+      this._masterItems = catResult.master_items || [];
 
       if (this._view === 'lists') this._renderLists();
       else if (this._view === 'list' && this._currentListId) {
         await this._refreshListItems();
+      } else if (this._view === 'add' && this._currentListId) {
+        try {
+          const result = await this._ws('ourgroceries_kiosk/get_list_items', { list_id: this._currentListId });
+          this._items = result.items || [];
+          this._refreshAddViewItems();
+        } catch (_) {}
       }
     } catch (err) {
       console.warn('OG Kiosk: poll failed', err);
@@ -459,15 +468,10 @@ class OurGroceriesKioskCard extends HTMLElement {
         </button>
       </div>
       <div class="og-list-view-body">
-        <div class="og-add-item-row">
-          <div class="og-input-wrapper">
-            <input id="og-input" type="text" placeholder="Add an item..." autocomplete="off" autocorrect="on" autocapitalize="sentences" />
-            <div id="og-autocomplete" class="autocomplete-dropdown"></div>
-          </div>
-          <button id="og-add-btn" class="og-add-btn" aria-label="Add">
-            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-          </button>
-        </div>
+        <button id="og-add-trigger" class="og-add-trigger-btn">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          <span>Add an item...</span>
+        </button>
         <div id="og-status" class="og-status hidden"></div>
         <div id="og-items-container" class="og-items-container"></div>
         <div id="og-crossed-container" class="og-crossed-container"></div>
@@ -492,33 +496,8 @@ class OurGroceriesKioskCard extends HTMLElement {
     const settingsBtn = root.querySelector('#og-settings-btn');
     if (settingsBtn) settingsBtn.addEventListener('click', () => this._renderSettings());
 
-    const input = root.querySelector('#og-input');
-    const addBtn = root.querySelector('#og-add-btn');
-    const autocomplete = root.querySelector('#og-autocomplete');
-
-    if (addBtn) addBtn.addEventListener('click', () => this._handleAdd());
-
-    if (input) {
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          if (this._autocompleteIdx >= 0) {
-            const items = autocomplete.querySelectorAll('.ac-item');
-            if (items[this._autocompleteIdx]) { items[this._autocompleteIdx].click(); return; }
-          }
-          this._handleAdd();
-        } else if (e.key === 'ArrowDown') { e.preventDefault(); this._moveAutocomplete(1); }
-        else if (e.key === 'ArrowUp') { e.preventDefault(); this._moveAutocomplete(-1); }
-        else if (e.key === 'Escape') { this._hideAutocomplete(); }
-      });
-      input.addEventListener('input', () => this._updateAutocomplete());
-      input.addEventListener('focus', () => this._updateAutocomplete());
-    }
-
-    root.addEventListener('click', (e) => {
-      if (input && autocomplete && !e.composedPath().includes(input) && !e.composedPath().includes(autocomplete)) {
-        this._hideAutocomplete();
-      }
-    });
+    const addTrigger = root.querySelector('#og-add-trigger');
+    if (addTrigger) addTrigger.addEventListener('click', () => this._showAddView());
   }
 
   _renderListItems() {
@@ -596,14 +575,27 @@ class OurGroceriesKioskCard extends HTMLElement {
           </div>
         `;
       }
+      crossedHtml += `
+        <div class="og-crossed-actions">
+          <button class="og-crossed-action-btn" id="og-delete-crossed">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            <span>Delete all crossed-off items</span>
+          </button>
+          <button class="og-crossed-action-btn" id="og-uncross-all">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
+            <span>Uncross-off all items</span>
+          </button>
+        </div>
+      `;
     }
     crossedContainer.innerHTML = crossedHtml;
 
-    // Bind crossed-off item taps → show popup
+    // Bind crossed-off item name taps → uncross single item
     crossedContainer.querySelectorAll('.og-crossed-name').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
-        this._showCrossedOffPopup();
+        const itemDiv = el.closest('.og-crossed-item');
+        if (itemDiv) this._toggleCrossedOff(itemDiv.dataset.id, false);
       });
     });
 
@@ -614,6 +606,13 @@ class OurGroceriesKioskCard extends HTMLElement {
         this._showEditView(btn.dataset.id);
       });
     });
+
+    // Bind crossed-off action buttons
+    const deleteBtn = crossedContainer.querySelector('#og-delete-crossed');
+    if (deleteBtn) deleteBtn.addEventListener('click', () => this._deleteCrossedOff());
+
+    const uncrossBtn = crossedContainer.querySelector('#og-uncross-all');
+    if (uncrossBtn) uncrossBtn.addEventListener('click', () => this._uncrossOffAll());
   }
 
   _groupByCategory(items) {
@@ -641,45 +640,6 @@ class OurGroceriesKioskCard extends HTMLElement {
     } catch (err) {
       console.error('OG Kiosk: toggle crossed off failed', err);
     }
-  }
-
-  _showCrossedOffPopup() {
-    const root = this._getRoot();
-    if (!root) return;
-
-    // Remove existing popup
-    const existing = root.querySelector('.og-crossed-popup-overlay');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.className = 'og-crossed-popup-overlay';
-    overlay.innerHTML = `
-      <div class="og-crossed-popup">
-        <button class="og-crossed-popup-btn delete-btn" id="og-delete-crossed">
-          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-          <span>Delete all crossed-off items</span>
-        </button>
-        <button class="og-crossed-popup-btn uncross-btn" id="og-uncross-all">
-          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>
-          <span>Uncross-off all items</span>
-        </button>
-      </div>
-    `;
-    root.appendChild(overlay);
-
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) overlay.remove();
-    });
-
-    overlay.querySelector('#og-delete-crossed').addEventListener('click', async () => {
-      overlay.remove();
-      await this._deleteCrossedOff();
-    });
-
-    overlay.querySelector('#og-uncross-all').addEventListener('click', async () => {
-      overlay.remove();
-      await this._uncrossOffAll();
-    });
   }
 
   async _deleteCrossedOff() {
@@ -711,27 +671,30 @@ class OurGroceriesKioskCard extends HTMLElement {
 
   /* ---- Add / Remove item ---- */
 
-  _handleAdd() {
-    const root = this._getRoot();
-    const input = root && root.querySelector('#og-input');
-    if (!input) return;
-    const name = input.value.trim();
-    if (!name) return;
-    this._hideAutocomplete();
-    input.value = '';
-    this._addItem(name);
-  }
-
   async _addItem(name) {
     if (!this._currentListId) return;
     try {
       await this._ws('ourgroceries_kiosk/add_item', { list_id: this._currentListId, name });
       this._addToHistory(name);
-      this._showStatus(`Added "${name}"`, 'success');
-      await this._refreshListItems();
+      if (this._view === 'add') {
+        this._showAddViewStatus(`Added "${name}"`);
+        // Silently refresh items so "on list" indicators update
+        try {
+          const result = await this._ws('ourgroceries_kiosk/get_list_items', { list_id: this._currentListId });
+          this._items = result.items || [];
+          this._refreshAddViewItems();
+        } catch (_) {}
+      } else {
+        this._showStatus(`Added "${name}"`, 'success');
+        await this._refreshListItems();
+      }
     } catch (err) {
       console.error('OG Kiosk: add item failed', err);
-      this._showStatus(`Failed to add "${name}"`, 'error');
+      if (this._view === 'add') {
+        this._showAddViewStatus(`Failed to add "${name}"`);
+      } else {
+        this._showStatus(`Failed to add "${name}"`, 'error');
+      }
     }
   }
 
@@ -748,6 +711,179 @@ class OurGroceriesKioskCard extends HTMLElement {
       console.error('OG Kiosk: remove failed', err);
       this._showStatus(`Failed to remove "${name}"`, 'error');
     }
+  }
+
+  /* ---- Add View ---- */
+
+  _showAddView() {
+    const root = this._getRoot();
+    if (!root) return;
+    this._view = 'add';
+
+    const currentNamesLower = new Set(
+      this._items.filter(i => !i.crossed_off).map(i => i.name.toLowerCase())
+    );
+
+    // Build deduplicated master item list
+    const seen = new Set();
+    const allItems = [];
+    for (const name of this._masterItems) {
+      const key = name.trim().toLowerCase();
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        allItems.push(name.trim());
+      }
+    }
+    allItems.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+    let itemsHtml = '';
+    for (const name of allItems) {
+      const onList = currentNamesLower.has(name.toLowerCase());
+      itemsHtml += `
+        <button class="og-add-view-item" data-name="${this._escAttr(name)}">
+          <div class="og-add-view-item-text">
+            <span class="og-add-view-item-name">${this._escHtml(name)}</span>
+            ${onList ? `<span class="og-add-view-on-list">On ${this._escHtml(this._currentListName)} list</span>` : ''}
+          </div>
+        </button>
+      `;
+    }
+
+    root.innerHTML = `
+      <div class="og-header og-add-header">
+        <button class="og-header-back-btn" id="og-add-back" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+        </button>
+        <div class="og-add-input-wrapper">
+          <input id="og-add-input" type="text" placeholder="Find or add item" autocomplete="off" autocorrect="on" autocapitalize="sentences" />
+          <button id="og-add-clear" class="og-add-clear-btn hidden" aria-label="Clear">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
+      </div>
+      <div id="og-add-status" class="og-status hidden"></div>
+      <div id="og-add-items" class="og-add-view-body">
+        ${itemsHtml}
+      </div>
+    `;
+
+    this._bindAddViewEvents();
+
+    // Auto-focus the input
+    const input = root.querySelector('#og-add-input');
+    if (input) setTimeout(() => input.focus(), 50);
+  }
+
+  _bindAddViewEvents() {
+    const root = this._getRoot();
+    if (!root) return;
+
+    const backBtn = root.querySelector('#og-add-back');
+    if (backBtn) backBtn.addEventListener('click', async () => {
+      // Refresh items before going back so list view is up to date
+      try {
+        const result = await this._ws('ourgroceries_kiosk/get_list_items', { list_id: this._currentListId });
+        this._items = result.items || [];
+      } catch (_) {}
+      this._renderListView();
+    });
+
+    const input = root.querySelector('#og-add-input');
+    const clearBtn = root.querySelector('#og-add-clear');
+
+    if (input) {
+      input.addEventListener('input', () => {
+        const hasText = input.value.length > 0;
+        if (clearBtn) clearBtn.classList.toggle('hidden', !hasText);
+        this._filterAddViewItems(input.value.trim());
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const name = input.value.trim();
+          if (name) {
+            this._addItem(name);
+            input.value = '';
+            if (clearBtn) clearBtn.classList.add('hidden');
+            this._filterAddViewItems('');
+          }
+        }
+      });
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        if (input) { input.value = ''; input.focus(); }
+        clearBtn.classList.add('hidden');
+        this._filterAddViewItems('');
+      });
+    }
+
+    // Bind item taps
+    root.querySelectorAll('.og-add-view-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._addItem(btn.dataset.name);
+      });
+    });
+  }
+
+  _filterAddViewItems(query) {
+    const root = this._getRoot();
+    if (!root) return;
+    const container = root.querySelector('#og-add-items');
+    if (!container) return;
+
+    const items = container.querySelectorAll('.og-add-view-item');
+    const q = query.toLowerCase();
+
+    if (!q) {
+      items.forEach(item => { item.style.display = ''; });
+      return;
+    }
+
+    items.forEach(item => {
+      const name = item.dataset.name || '';
+      const score = this._fuzzyScore(name, q);
+      item.style.display = score > 0 ? '' : 'none';
+    });
+  }
+
+  _refreshAddViewItems() {
+    const root = this._getRoot();
+    if (!root || this._view !== 'add') return;
+    const container = root.querySelector('#og-add-items');
+    if (!container) return;
+
+    const currentNamesLower = new Set(
+      this._items.filter(i => !i.crossed_off).map(i => i.name.toLowerCase())
+    );
+
+    container.querySelectorAll('.og-add-view-item').forEach(btn => {
+      const name = btn.dataset.name || '';
+      const onList = currentNamesLower.has(name.toLowerCase());
+      const subtitle = btn.querySelector('.og-add-view-on-list');
+      if (onList && !subtitle) {
+        const textDiv = btn.querySelector('.og-add-view-item-text');
+        if (textDiv) {
+          const span = document.createElement('span');
+          span.className = 'og-add-view-on-list';
+          span.textContent = `On ${this._currentListName} list`;
+          textDiv.appendChild(span);
+        }
+      } else if (!onList && subtitle) {
+        subtitle.remove();
+      }
+    });
+  }
+
+  _showAddViewStatus(message) {
+    const root = this._getRoot();
+    const el = root && root.querySelector('#og-add-status');
+    if (!el) return;
+    if (this._statusTimeoutId) clearTimeout(this._statusTimeoutId);
+    el.textContent = message;
+    el.className = 'og-status success';
+    this._statusTimeoutId = setTimeout(() => el.classList.add('hidden'), 2500);
   }
 
   /* ---- Edit View ---- */
@@ -1345,7 +1481,8 @@ class OurGroceriesKioskCard extends HTMLElement {
       div.addEventListener('click', () => {
         input.value = c.text;
         this._hideAutocomplete();
-        this._handleAdd();
+        this._addItem(c.text);
+        input.value = '';
       });
       dropdown.appendChild(div);
     });
@@ -1634,36 +1771,72 @@ class OurGroceriesKioskCard extends HTMLElement {
       }
       .og-item-menu-btn:active { background: rgba(0,0,0,0.05); }
 
-      /* ---- Add item row (always visible in list view) ---- */
-      .og-add-item-row {
-        display: flex; gap: 8px; align-items: center;
-        padding: 12px 16px;
+      /* ---- Add item trigger button (in list view) ---- */
+      .og-add-trigger-btn {
+        display: flex; gap: 10px; align-items: center;
+        padding: 14px 16px;
         background: var(--page-bg);
-        border-bottom: 1px solid var(--divider-color);
-        position: sticky; top: 0; z-index: 10;
-      }
-      .og-input-wrapper { flex: 1; position: relative; }
-      .og-add-item-row input {
+        border: none; border-bottom: 1px solid var(--divider-color);
+        color: var(--accent-color);
+        font-size: 18px; font-weight: 500;
+        cursor: pointer; touch-action: manipulation;
         width: 100%; box-sizing: border-box;
-        height: 48px; padding: 0 14px;
-        border: 2px solid var(--divider-color);
-        border-radius: 8px;
-        background: var(--item-bg);
-        color: var(--text-primary);
-        font-size: 18px; outline: none;
-        transition: border-color 0.2s;
+        text-align: left;
       }
-      .og-add-item-row input::placeholder { color: var(--crossed-off-text); opacity: 0.8; }
-      .og-add-item-row input:focus { border-color: var(--accent-color); }
-      .og-add-btn {
-        width: 48px; height: 48px; min-width: 48px;
+      .og-add-trigger-btn:active { opacity: 0.7; }
+
+      /* ---- Add view ---- */
+      .og-add-header {
+        gap: 8px;
+      }
+      .og-add-input-wrapper {
+        flex: 1; position: relative;
+        display: flex; align-items: center;
+      }
+      .og-add-input-wrapper input {
+        width: 100%; box-sizing: border-box;
+        height: 42px; padding: 0 36px 0 12px;
         border: none; border-radius: 8px;
-        background: var(--accent-color);
+        background: rgba(255,255,255,0.2);
         color: var(--text-on-accent);
+        font-size: 18px; outline: none;
+      }
+      .og-add-input-wrapper input::placeholder {
+        color: rgba(255,255,255,0.7);
+      }
+      .og-add-clear-btn {
+        position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+        width: 32px; height: 32px; border: none; border-radius: 50%;
+        background: transparent; color: rgba(255,255,255,0.7);
         cursor: pointer; display: flex; align-items: center; justify-content: center;
         touch-action: manipulation;
       }
-      .og-add-btn:active { opacity: 0.7; }
+      .og-add-clear-btn:active { opacity: 0.7; }
+      .og-add-view-body {
+        max-height: 75vh; overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        display: flex; flex-direction: column;
+      }
+      .og-add-view-item {
+        display: flex; align-items: center;
+        width: 100%; box-sizing: border-box;
+        padding: 14px 16px;
+        border: none; border-bottom: 1px solid var(--divider-color);
+        background: var(--item-bg);
+        text-align: left;
+        cursor: pointer; touch-action: manipulation;
+        color: var(--text-primary);
+      }
+      .og-add-view-item:active { opacity: 0.7; }
+      .og-add-view-item-text {
+        display: flex; flex-direction: column; gap: 2px;
+      }
+      .og-add-view-item-name {
+        font-size: 20px; line-height: 1.3;
+      }
+      .og-add-view-on-list {
+        font-size: 14px; color: var(--crossed-off-text);
+      }
 
       /* ---- Crossed-off items ---- */
       .og-crossed-container {
@@ -1684,31 +1857,24 @@ class OurGroceriesKioskCard extends HTMLElement {
       }
       .og-item-menu-btn.crossed { color: var(--crossed-off-text); }
 
-      /* ---- Crossed-off popup ---- */
-      .og-crossed-popup-overlay {
-        position: absolute; inset: 0; z-index: 200;
-        background: var(--overlay-bg);
-        display: flex; align-items: flex-end; justify-content: center;
-        padding: 24px;
+      /* ---- Crossed-off action buttons ---- */
+      .og-crossed-actions {
+        display: flex; flex-direction: column;
+        background: var(--crossed-off-bg);
+        padding: 8px 16px 16px;
       }
-      .og-crossed-popup {
-        background: var(--item-bg);
-        border-radius: 12px;
-        width: 100%; max-width: 400px;
-        overflow: hidden;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.25);
-      }
-      .og-crossed-popup-btn {
-        display: flex; align-items: center; gap: 12px;
+      .og-crossed-action-btn {
+        display: flex; align-items: center; gap: 10px;
         width: 100%; box-sizing: border-box;
-        padding: 18px 20px;
-        border: none; background: transparent;
-        font-size: 17px; cursor: pointer;
+        padding: 14px 16px;
+        border: none; border-radius: 8px;
+        background: rgba(0,0,0,0.04);
+        font-size: 16px; cursor: pointer;
         touch-action: manipulation;
         color: var(--accent-color);
+        margin-top: 8px;
       }
-      .og-crossed-popup-btn:first-child { border-bottom: 1px solid var(--divider-color); }
-      .og-crossed-popup-btn:active { background: rgba(0,0,0,0.05); }
+      .og-crossed-action-btn:active { opacity: 0.7; }
 
       /* ---- Autocomplete ---- */
       .autocomplete-dropdown {

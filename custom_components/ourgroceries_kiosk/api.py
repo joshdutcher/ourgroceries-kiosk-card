@@ -112,11 +112,18 @@ class OurGroceriesAPI:
                 if name:
                     master_categories[name] = cat_map[cat_id]
 
+        master_item_names = [
+            item.get("value", "")
+            for item in master_items
+            if item.get("value", "").strip()
+        ]
+
         return {
             "categories": all_categories,
             "master_categories": master_categories,
             "category_id_map": cat_map,
             "category_name_to_id": {v.lower(): k for k, v in cat_map.items()},
+            "master_items": master_item_names,
         }
 
     async def set_item_category(
