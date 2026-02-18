@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '5.0.0';
+const OG_CARD_VERSION = '5.0.1';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -468,10 +468,14 @@ class OurGroceriesKioskCard extends HTMLElement {
         </button>
       </div>
       <div class="og-list-view-body">
-        <button id="og-add-trigger" class="og-add-trigger-btn">
-          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-          <span>Add an item...</span>
-        </button>
+        <div class="og-add-item-row" id="og-add-trigger">
+          <div class="og-input-wrapper">
+            <input type="text" placeholder="Add an item..." readonly />
+          </div>
+          <button class="og-add-btn" aria-label="Add">
+            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          </button>
+        </div>
         <div id="og-status" class="og-status hidden"></div>
         <div id="og-items-container" class="og-items-container"></div>
         <div id="og-crossed-container" class="og-crossed-container"></div>
@@ -1771,19 +1775,35 @@ class OurGroceriesKioskCard extends HTMLElement {
       }
       .og-item-menu-btn:active { background: rgba(0,0,0,0.05); }
 
-      /* ---- Add item trigger button (in list view) ---- */
-      .og-add-trigger-btn {
-        display: flex; gap: 10px; align-items: center;
-        padding: 14px 16px;
+      /* ---- Add item row (in list view) ---- */
+      .og-add-item-row {
+        display: flex; gap: 8px; align-items: center;
+        padding: 12px 16px;
         background: var(--page-bg);
-        border: none; border-bottom: 1px solid var(--divider-color);
-        color: var(--accent-color);
-        font-size: 18px; font-weight: 500;
-        cursor: pointer; touch-action: manipulation;
-        width: 100%; box-sizing: border-box;
-        text-align: left;
+        border-bottom: 1px solid var(--divider-color);
+        position: sticky; top: 0; z-index: 10;
       }
-      .og-add-trigger-btn:active { opacity: 0.7; }
+      .og-input-wrapper { flex: 1; position: relative; }
+      .og-add-item-row input {
+        width: 100%; box-sizing: border-box;
+        height: 48px; padding: 0 14px;
+        border: 2px solid var(--divider-color);
+        border-radius: 8px;
+        background: var(--item-bg);
+        color: var(--text-primary);
+        font-size: 18px; outline: none;
+        cursor: pointer;
+      }
+      .og-add-item-row input::placeholder { color: var(--crossed-off-text); opacity: 0.8; }
+      .og-add-btn {
+        width: 48px; height: 48px; min-width: 48px;
+        border: none; border-radius: 8px;
+        background: var(--accent-color);
+        color: var(--text-on-accent);
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        touch-action: manipulation;
+      }
+      .og-add-btn:active { opacity: 0.7; }
 
       /* ---- Add view ---- */
       .og-add-header {
