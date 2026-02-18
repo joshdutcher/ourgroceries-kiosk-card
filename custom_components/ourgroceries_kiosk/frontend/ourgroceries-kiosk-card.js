@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.1';
+const OG_CARD_VERSION = '0.1.2';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -1298,6 +1298,7 @@ class OurGroceriesKioskCard extends HTMLElement {
         <span style="width:48px"></span>
       </div>
       <div class="og-settings-body">
+    `;
     const themeName = this._config.theme === 'system'
       ? 'SYSTEM'
       : (this._config.theme || 'citrus').replace(/_/g, ' ').toUpperCase();
