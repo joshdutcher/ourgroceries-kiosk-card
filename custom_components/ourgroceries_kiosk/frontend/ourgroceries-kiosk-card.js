@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '4.0.8';
+const OG_CARD_VERSION = '4.0.9';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -459,7 +459,6 @@ class OurGroceriesKioskCard extends HTMLElement {
         </button>
       </div>
       <div class="og-list-view-body">
-        <div id="og-items-container" class="og-items-container"></div>
         <div class="og-add-item-row">
           <div class="og-input-wrapper">
             <input id="og-input" type="text" placeholder="Add an item..." autocomplete="off" autocorrect="on" autocapitalize="sentences" />
@@ -470,6 +469,7 @@ class OurGroceriesKioskCard extends HTMLElement {
           </button>
         </div>
         <div id="og-status" class="og-status hidden"></div>
+        <div id="og-items-container" class="og-items-container"></div>
         <div id="og-crossed-container" class="og-crossed-container"></div>
       </div>
     `;
@@ -1639,7 +1639,8 @@ class OurGroceriesKioskCard extends HTMLElement {
         display: flex; gap: 8px; align-items: center;
         padding: 12px 16px;
         background: var(--page-bg);
-        border-top: 1px solid var(--divider-color);
+        border-bottom: 1px solid var(--divider-color);
+        position: sticky; top: 0; z-index: 10;
       }
       .og-input-wrapper { flex: 1; position: relative; }
       .og-add-item-row input {

@@ -1,7 +1,7 @@
 {
   "domain": "ourgroceries_kiosk",
   "name": "OurGroceries Kiosk",
-  "version": "4.0.8",
+  "version": "4.0.9",
   "config_flow": true,
   "requirements": ["ourgroceries>=1.3.0"],
   "dependencies": [],
