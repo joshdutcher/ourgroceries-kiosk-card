@@ -1,0 +1,8 @@
+[lint]
+select = ["E", "F", "W", "I"]
+
+[format]
+indent-style = "space"
+
+target-version = "py312"
+line-length = 88

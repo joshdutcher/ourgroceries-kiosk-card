@@ -1,6 +1,12 @@
 *.pyc
 __pycache__/
 .DS_Store
-
-.claude
-designref/
+.env
+Zone.Identifier
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
