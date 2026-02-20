@@ -5,9 +5,9 @@ import os
 
 import voluptuous as vol
 from homeassistant.components import websocket_api
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.components.http import StaticPathConfig
 
 from .api import OurGroceriesAPI
 from .const import (
@@ -17,10 +17,10 @@ from .const import (
     WS_ADD_ITEM,
     WS_DELETE_CROSSED_OFF,
     WS_GET_CATEGORIES,
+    WS_GET_ITEM_LIST_MAP,
     WS_GET_LIST_ITEMS,
     WS_GET_LISTS,
     WS_REMOVE_ITEM,
-    WS_GET_ITEM_LIST_MAP,
     WS_SET_ITEM_CATEGORY,
     WS_TOGGLE_CROSSED_OFF,
     WS_UPDATE_ITEM,
@@ -50,7 +50,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register the frontend card as a static resource
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(CARD_URL, os.path.join(FRONTEND_DIR, "ourgroceries-kiosk-card.js"), cache_headers=False)]
+        [StaticPathConfig(
+            CARD_URL,
+            os.path.join(FRONTEND_DIR, "ourgroceries-kiosk-card.js"),
+            cache_headers=False,
+        )]
     )
 
     # Register as a Lovelace resource so users don't have to manually add it

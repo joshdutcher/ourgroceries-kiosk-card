@@ -127,7 +127,10 @@ class OurGroceriesAPI:
         }
 
     async def get_item_list_map(self) -> dict:
-        """Return a map of lowercase item names to lists they appear on (non-crossed-off only)."""
+        """Return a map of lowercase item names to lists they appear on.
+
+        Only includes non-crossed-off items.
+        """
         client = await self._ensure_login()
         data = await client.get_my_lists()
         lists = data.get("shoppingLists", [])

@@ -3,11 +3,10 @@
 import logging
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 
-from .const import CONF_PASSWORD, CONF_USERNAME, DOMAIN
 from .api import OurGroceriesAPI
+from .const import CONF_PASSWORD, CONF_USERNAME, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
