@@ -2,7 +2,6 @@
 
 A touch-friendly Home Assistant Lovelace card for managing OurGroceries shopping lists on a wall tablet. One HACS install, enter your credentials, add the card.
 
-<!-- screenshot: card on tablet showing a list with items and categories -->
 ![Card Screenshot](screenshots/card.png)
 
 ## Features
@@ -57,9 +56,6 @@ views:
 ```
 
 `type: panel` makes the card fill the screen. The `kiosk_mode` block requires the separate [Kiosk Mode](https://github.com/NemesisRE/kiosk-mode) HACS frontend plugin (see below).
-
-<!-- screenshot: full-screen tablet view with kiosk mode enabled -->
-![Tablet Screenshot](screenshots/tablet.png)
 
 ### Card Options
 
