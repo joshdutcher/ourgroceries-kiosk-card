@@ -265,11 +265,12 @@ class OurGroceriesKioskCard extends HTMLElement {
   /* ---- Initial load ---- */
 
   async _initialLoad() {
+    // Fetch lists and categories together — both are needed to render
+    // items grouped by category. Only get_item_list_map (expensive) is deferred.
     try {
-      const [listsResult, catResult, itemListMap] = await Promise.all([
+      const [listsResult, catResult] = await Promise.all([
         this._ws('ourgroceries_kiosk/get_lists'),
         this._ws('ourgroceries_kiosk/get_categories'),
-        this._ws('ourgroceries_kiosk/get_item_list_map').catch(() => ({})),
       ]);
       this._lists = listsResult.lists || [];
       this._masterCategories = catResult.master_categories || {};
@@ -277,13 +278,12 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._categoryNameToId = catResult.category_name_to_id || {};
       this._categoryIdMap = catResult.category_id_map || {};
       this._masterItems = catResult.master_items || [];
-      this._itemListMap = itemListMap || {};
     } catch (err) {
       console.error('OG Kiosk: initial load failed', err);
       this._lists = [];
     }
 
-    // Determine initial view
+    // Render the initial view immediately
     if (!this._config.theme || this._config.theme === '') {
       this._wizardStep = 1;
       this._renderWizard();
@@ -296,6 +296,11 @@ class OurGroceriesKioskCard extends HTMLElement {
     }
 
     this._startPolling();
+
+    // Load item-list-map in the background (expensive: fetches all lists' items)
+    this._ws('ourgroceries_kiosk/get_item_list_map')
+      .then(map => { this._itemListMap = map || {}; })
+      .catch(() => {});
   }
 
   async _navigateToListByName(name) {
@@ -320,10 +325,11 @@ class OurGroceriesKioskCard extends HTMLElement {
 
   async _poll() {
     try {
-      const [listsResult, catResult, itemListMap] = await Promise.all([
+      // Fetch lists + categories in parallel; item-list-map loads separately
+      // to avoid blocking the main poll update.
+      const [listsResult, catResult] = await Promise.all([
         this._ws('ourgroceries_kiosk/get_lists'),
         this._ws('ourgroceries_kiosk/get_categories'),
-        this._ws('ourgroceries_kiosk/get_item_list_map').catch(() => ({})),
       ]);
       this._lists = listsResult.lists || [];
       this._masterCategories = catResult.master_categories || {};
@@ -331,7 +337,6 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._categoryNameToId = catResult.category_name_to_id || {};
       this._categoryIdMap = catResult.category_id_map || {};
       this._masterItems = catResult.master_items || [];
-      this._itemListMap = itemListMap || {};
 
       if (this._view === 'lists') this._renderLists();
       else if (this._view === 'list' && this._currentListId) {
@@ -343,6 +348,11 @@ class OurGroceriesKioskCard extends HTMLElement {
           this._refreshAddViewItems();
         } catch (_) {}
       }
+
+      // Refresh item-list-map in the background (expensive call)
+      this._ws('ourgroceries_kiosk/get_item_list_map')
+        .then(map => { this._itemListMap = map || {}; })
+        .catch(() => {});
     } catch (err) {
       console.warn('OG Kiosk: poll failed', err);
     }
@@ -368,7 +378,11 @@ class OurGroceriesKioskCard extends HTMLElement {
     this.shadowRoot.innerHTML = `
       <style>${this._buildStyles()}</style>
       <ha-card>
-        <div id="og-root" class="og-root"></div>
+        <div id="og-root" class="og-root">
+          <div class="og-loading">
+            <div class="og-loading-spinner"></div>
+          </div>
+        </div>
       </ha-card>
     `;
     this._domBuilt = true;
@@ -1811,6 +1825,23 @@ class OurGroceriesKioskCard extends HTMLElement {
         flex-direction: column;
         flex: 1;
         min-height: 0;
+      }
+
+      .og-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 200px;
+      }
+      .og-loading-spinner {
+        width: 36px; height: 36px;
+        border: 3px solid var(--divider-color);
+        border-top-color: var(--accent-color);
+        border-radius: 50%;
+        animation: og-spin 0.8s linear infinite;
+      }
+      @keyframes og-spin {
+        to { transform: rotate(360deg); }
       }
 
       /* ---- Header ---- */

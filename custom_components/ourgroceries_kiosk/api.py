@@ -1,10 +1,37 @@
 """Async OurGroceries API client wrapper."""
 
 import logging
+from functools import wraps
+from typing import Any, Callable, Coroutine
 
 import ourgroceries as og
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _auto_reauth(func: Callable[..., Coroutine[Any, Any, Any]]):
+    """Decorator that retries an API call once after re-authenticating.
+
+    The OurGroceries session cookie can expire server-side at any time.
+    When that happens, the library raises an exception (e.g. JSON decode
+    error on the HTML login redirect).  This decorator catches the first
+    failure, forces a fresh login, and retries the call exactly once.
+    """
+
+    @wraps(func)
+    async def wrapper(self: "OurGroceriesAPI", *args, **kwargs):
+        try:
+            return await func(self, *args, **kwargs)
+        except Exception as first_err:
+            _LOGGER.debug(
+                "OurGroceries call %s failed (%s), re-authenticating",
+                func.__name__,
+                first_err,
+            )
+            await self._force_relogin()
+            return await func(self, *args, **kwargs)
+
+    return wrapper
 
 
 class OurGroceriesAPI:
@@ -23,6 +50,13 @@ class OurGroceriesAPI:
             self._logged_in = True
         return self._client
 
+    async def _force_relogin(self) -> None:
+        """Drop the current session and create a fresh one."""
+        _LOGGER.info("OurGroceries: forcing fresh login")
+        self._client = og.OurGroceries(self._username, self._password)
+        await self._client.login()
+        self._logged_in = True
+
     async def validate_credentials(self) -> bool:
         """Test login. Returns True on success, raises on failure."""
         client = og.OurGroceries(self._username, self._password)
@@ -31,6 +65,7 @@ class OurGroceriesAPI:
         self._logged_in = True
         return True
 
+    @_auto_reauth
     async def get_lists(self) -> list[dict]:
         """Return all shopping lists with name, id, and active item count."""
         client = await self._ensure_login()
@@ -45,6 +80,7 @@ class OurGroceriesAPI:
             })
         return result
 
+    @_auto_reauth
     async def get_list_items(self, list_id: str) -> list[dict]:
         """Return items for a specific list."""
         client = await self._ensure_login()
@@ -52,25 +88,35 @@ class OurGroceriesAPI:
         items = data.get("list", {}).get("items", [])
         result = []
         for item in items:
+            # The OurGroceries API no longer returns a boolean "crossedOff".
+            # Instead, crossed-off items have a "crossedOffAt" timestamp.
+            # Fall back to the legacy "crossedOff" field if present.
+            crossed = bool(
+                item.get("crossedOff")
+                or item.get("crossedOffAt")
+            )
             result.append({
                 "id": item.get("id", ""),
                 "name": item.get("value", ""),
-                "crossed_off": item.get("crossedOff", False),
+                "crossed_off": crossed,
                 "category_id": item.get("categoryId", ""),
                 "note": item.get("note", ""),
             })
         return result
 
+    @_auto_reauth
     async def add_item(self, list_id: str, name: str) -> None:
         """Add an item to a list."""
         client = await self._ensure_login()
         await client.add_item_to_list(list_id, name, auto_category=True)
 
+    @_auto_reauth
     async def remove_item(self, list_id: str, item_id: str) -> None:
         """Remove an item from a list."""
         client = await self._ensure_login()
         await client.remove_item_from_list(list_id, item_id)
 
+    @_auto_reauth
     async def update_item(
         self, list_id: str, item_id: str, name: str, category_id: str = ""
     ) -> None:
@@ -78,6 +124,7 @@ class OurGroceriesAPI:
         client = await self._ensure_login()
         await client.change_item_on_list(list_id, item_id, category_id, name)
 
+    @_auto_reauth
     async def toggle_crossed_off(
         self, list_id: str, item_id: str, cross_off: bool
     ) -> None:
@@ -85,11 +132,13 @@ class OurGroceriesAPI:
         client = await self._ensure_login()
         await client.toggle_item_crossed_off(list_id, item_id, cross_off)
 
+    @_auto_reauth
     async def delete_crossed_off(self, list_id: str) -> None:
         """Delete all crossed-off items from a list."""
         client = await self._ensure_login()
         await client.delete_all_crossed_off_from_list(list_id)
 
+    @_auto_reauth
     async def get_categories(self) -> dict:
         """Return category mapping and master list item categories."""
         client = await self._ensure_login()
@@ -126,6 +175,7 @@ class OurGroceriesAPI:
             "master_items": master_item_names,
         }
 
+    @_auto_reauth
     async def get_item_list_map(self) -> dict:
         """Return a map of lowercase item names to lists they appear on.
 
@@ -144,7 +194,7 @@ class OurGroceriesAPI:
             list_data = await client.get_list_items(list_id)
             items = list_data.get("list", {}).get("items", [])
             for item in items:
-                if item.get("crossedOff", False):
+                if item.get("crossedOff") or item.get("crossedOffAt"):
                     continue
                 name = item.get("value", "").strip().lower()
                 if name:
@@ -154,6 +204,7 @@ class OurGroceriesAPI:
 
         return item_map
 
+    @_auto_reauth
     async def set_item_category(
         self,
         item_name: str,
