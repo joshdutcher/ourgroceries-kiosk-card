@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.4';
+const OG_CARD_VERSION = '0.1.5';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -1784,6 +1784,7 @@ class OurGroceriesKioskCard extends HTMLElement {
         --overlay-bg: rgba(0,0,0,0.45);
 
         display: block;
+        height: 100%;
         touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
         user-select: none;
@@ -1797,6 +1798,9 @@ class OurGroceriesKioskCard extends HTMLElement {
         background: var(--page-bg);
         color: var(--text-primary);
         box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
       }
 
       .hidden { display: none !important; }
@@ -1805,7 +1809,8 @@ class OurGroceriesKioskCard extends HTMLElement {
         position: relative;
         display: flex;
         flex-direction: column;
-        min-height: 200px;
+        flex: 1;
+        min-height: 0;
       }
 
       /* ---- Header ---- */
@@ -1847,9 +1852,10 @@ class OurGroceriesKioskCard extends HTMLElement {
 
       /* ---- List of Lists ---- */
       .og-lists-container {
-        max-height: 75vh;
+        flex: 1;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
+        min-height: 0;
       }
       .og-list-row {
         display: flex; align-items: center;
@@ -1877,9 +1883,10 @@ class OurGroceriesKioskCard extends HTMLElement {
       /* ---- List view items ---- */
       .og-list-view-body {
         display: flex; flex-direction: column;
-        max-height: 75vh;
+        flex: 1;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
+        min-height: 0;
       }
       .og-items-container { display: flex; flex-direction: column; }
       .og-category-bar {
@@ -1997,9 +2004,10 @@ class OurGroceriesKioskCard extends HTMLElement {
       }
       .og-add-toast-action:active { opacity: 0.7; }
       .og-add-view-body {
-        max-height: 75vh; overflow-y: auto;
+        flex: 1; overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         display: flex; flex-direction: column;
+        min-height: 0;
       }
       .og-add-view-item {
         display: flex; align-items: center;
