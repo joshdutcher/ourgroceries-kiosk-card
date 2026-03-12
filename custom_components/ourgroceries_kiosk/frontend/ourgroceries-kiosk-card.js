@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.9';
+const OG_CARD_VERSION = '0.1.10';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -2366,9 +2366,9 @@ class OurGroceriesKioskCard extends HTMLElement {
       }
       .og-setting-option.active { border-color: var(--accent-color); color: var(--accent-color); font-weight: 700; }
       .og-setting-option:active { opacity: 0.7; }
-      .og-setting-list-options { display: flex; flex-wrap: wrap; gap: 6px; }
+      .og-setting-list-options { display: inline-flex; flex-direction: column; gap: 6px; }
       .og-setting-list-option {
-        flex: 0 0 auto; padding: 10px 16px; border: 1px solid var(--divider-color);
+        padding: 10px 16px; border: 1px solid var(--divider-color);
         border-radius: 8px; background: var(--item-bg);
         color: var(--text-primary); font-size: 16px;
         cursor: pointer; touch-action: manipulation;

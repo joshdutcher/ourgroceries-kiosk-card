@@ -94,3 +94,4 @@
 | v0.1.0 | 2026-02-18 | First tagged release — version numbering reset |
 | v0.1.1 | 2026-02-18 | Multi-list indicators, dark snackbar, empty state, theme labels |
 | v0.1.2 | 2026-02-18 | Delete confirmation, floating toast, admin PIN redesign, template literal fix |
+| v0.1.10 | 2026-03-12 | Settings list picker: one-per-row, equal-width buttons |

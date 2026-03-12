@@ -10,7 +10,7 @@ The project started as a manual-install card (v3) depending on HA's built-in Our
 
 - **GitHub:** `joshdutcher/ourgroceries-kiosk-card`
 - **License:** MIT
-- **Current version:** 0.1.2 (manifest: 0.1.1, JS: `OG_CARD_VERSION = '0.1.2'`)
+- **Current version:** 0.1.10
 - **Tags:** v0.1.0, v0.1.1, v0.1.2
 
 ## Architecture
