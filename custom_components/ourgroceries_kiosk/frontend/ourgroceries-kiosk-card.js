@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.5';
+const OG_CARD_VERSION = '0.1.6';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
