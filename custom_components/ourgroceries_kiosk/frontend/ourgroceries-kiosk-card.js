@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.6';
+const OG_CARD_VERSION = '0.1.7';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -230,6 +230,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       locked_list: config.locked_list || '',
       default_list: config.default_list || '',
       admin_pin: config.admin_pin || '',
+      density: config.density || 'default',
     };
     // Overlay per-device localStorage overrides on top of YAML defaults
     try {
@@ -238,8 +239,9 @@ class OurGroceriesKioskCard extends HTMLElement {
       if (local.list_mode) this._config.list_mode = local.list_mode;
       if (local.locked_list !== undefined) this._config.locked_list = local.locked_list;
       if (local.default_list !== undefined) this._config.default_list = local.default_list;
+      if (local.density) this._config.density = local.density;
     } catch (_) { /* ignore corrupt localStorage */ }
-    if (this._domBuilt) this._applyTheme();
+    if (this._domBuilt) { this._applyTheme(); this._applyDensity(); }
   }
 
   getCardSize() { return 8; }
@@ -387,6 +389,11 @@ class OurGroceriesKioskCard extends HTMLElement {
     `;
     this._domBuilt = true;
     this._applyTheme();
+    this._applyDensity();
+  }
+
+  _applyDensity() {
+    this.classList.toggle('og-compact', this._config.density === 'compact');
   }
 
   _applyTheme() {
@@ -495,9 +502,6 @@ class OurGroceriesKioskCard extends HTMLElement {
           <div class="og-input-wrapper">
             <input type="text" placeholder="Add an item..." readonly />
           </div>
-          <button class="og-add-btn" aria-label="Add">
-            <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-          </button>
         </div>
         <div id="og-status" class="og-status hidden"></div>
         <div id="og-items-container" class="og-items-container"></div>
@@ -581,7 +585,7 @@ class OurGroceriesKioskCard extends HTMLElement {
     }
 
     if (active.length === 0 && crossedOff.length === 0) {
-      html = '<div class="og-empty">Tap <span style="color:var(--accent-color);font-weight:700">+</span> to add an item.</div>';
+      html = '<div class="og-empty">Tap the bar above to add an item.</div>';
     }
 
     container.innerHTML = html;
@@ -1338,6 +1342,13 @@ class OurGroceriesKioskCard extends HTMLElement {
     html += `
           </div>
         </div>
+        <div class="og-setting-section">
+          <div class="og-setting-label">DENSITY</div>
+          <div class="og-setting-row">
+            <button class="og-setting-option${this._config.density !== 'compact' ? ' active' : ''}" data-density="default">Default</button>
+            <button class="og-setting-option${this._config.density === 'compact' ? ' active' : ''}" data-density="compact">Compact</button>
+          </div>
+        </div>
     `;
 
     if (showAdmin) {
@@ -1438,6 +1449,16 @@ class OurGroceriesKioskCard extends HTMLElement {
       btn.addEventListener('click', () => {
         this._config.theme = btn.dataset.theme;
         this._applyTheme();
+        this._saveLocalConfig();
+        this._renderSettings();
+      });
+    });
+
+    // Density
+    root.querySelectorAll('[data-density]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._config.density = btn.dataset.density;
+        this._applyDensity();
         this._saveLocalConfig();
         this._renderSettings();
       });
@@ -1601,6 +1622,7 @@ class OurGroceriesKioskCard extends HTMLElement {
         list_mode: this._config.list_mode,
         locked_list: this._config.locked_list,
         default_list: this._config.default_list,
+        density: this._config.density,
       }));
     } catch (_) { /* localStorage full or unavailable */ }
   }
@@ -1975,17 +1997,7 @@ class OurGroceriesKioskCard extends HTMLElement {
         cursor: pointer;
       }
       .og-add-item-row input::placeholder { color: var(--crossed-off-text); opacity: 0.8; }
-      .og-add-btn {
-        width: 48px; height: 48px; min-width: 48px;
-        border: none; border-radius: 8px;
-        background: var(--accent-color);
-        color: var(--text-on-accent);
-        cursor: pointer; display: flex; align-items: center; justify-content: center;
-        touch-action: manipulation;
-      }
-      .og-add-btn:active { opacity: 0.7; }
       .og-add-item-row.og-tapped input { border-color: var(--accent-color); }
-      .og-add-item-row.og-tapped .og-add-btn { opacity: 0.7; }
 
       /* ---- Add view ---- */
       .og-add-header {
@@ -2425,6 +2437,18 @@ class OurGroceriesKioskCard extends HTMLElement {
         text-align: left;
       }
       .og-wizard-list-option:active { border-color: var(--accent-color); }
+
+      /* ---- Compact density ---- */
+      :host(.og-compact) .og-header { padding-block: 0; min-height: 40px; }
+      :host(.og-compact) .og-add-item-row { padding: 4px 16px; }
+      :host(.og-compact) .og-add-item-row input { height: 32px; font-size: 14px; }
+      :host(.og-compact) .og-item { padding-block: 0; min-height: 30px; }
+      :host(.og-compact) .og-item-name { font-size: 14px; }
+      :host(.og-compact) .og-item-menu-btn { height: 30px; min-height: 30px; }
+      :host(.og-compact) .og-crossed-item { padding-block: 0; min-height: 30px; }
+      :host(.og-compact) .og-crossed-name { font-size: 14px; }
+      :host(.og-compact) .og-category-bar { padding-block: 2px; font-size: 14px; }
+      :host(.og-compact) .og-list-row { padding: 10px 20px; font-size: 17px; }
     `;
   }
 }
