@@ -98,7 +98,7 @@ class OurGroceriesAPI:
             result.append({
                 "id": item.get("id", ""),
                 "name": item.get("value", ""),
-                "crossed_off": crossed,
+                "crossed_off": item.get("crossedOff", False),
                 "crossed_off_at": item.get("crossedOffAt", 0),
                 "category_id": item.get("categoryId", ""),
                 "note": item.get("note", ""),
