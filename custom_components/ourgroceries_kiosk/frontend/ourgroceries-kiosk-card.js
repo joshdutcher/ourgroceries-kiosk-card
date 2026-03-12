@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.8';
+const OG_CARD_VERSION = '0.1.9';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -2441,6 +2441,8 @@ class OurGroceriesKioskCard extends HTMLElement {
       :host(.og-compact) .og-header-title { font-size: 18px; }
       :host(.og-compact) .og-header-icon-btn { width: 30px; height: 30px; min-width: 30px; }
       :host(.og-compact) .og-header-icon-btn svg { width: 18px; height: 18px; }
+      :host(.og-compact) .og-header-back-btn { width: 30px; height: 30px; min-width: 30px; }
+      :host(.og-compact) .og-header-back-btn svg { width: 16px; height: 16px; }
       :host(.og-compact) .og-add-item-row { padding: 4px 16px; }
       :host(.og-compact) .og-add-item-row input { height: 32px; font-size: 14px; }
       :host(.og-compact) .og-item { padding-block: 0; min-height: 30px; }
