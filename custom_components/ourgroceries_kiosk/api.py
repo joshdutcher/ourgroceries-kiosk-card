@@ -113,7 +113,7 @@ class OurGroceriesAPI:
                     master_categories[name] = cat_map[cat_id]
 
         master_item_names = [
-            item.get("value", "")
+            {"name": item.get("value", ""), "added_count": item.get("addedCount", 0)}
             for item in master_items
             if item.get("value", "").strip()
         ]
