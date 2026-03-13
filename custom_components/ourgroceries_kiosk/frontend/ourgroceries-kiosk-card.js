@@ -2452,6 +2452,11 @@ class OurGroceriesKioskCard extends HTMLElement {
       :host(.og-compact) .og-crossed-name { font-size: 14px; }
       :host(.og-compact) .og-category-bar { padding-block: 2px; font-size: 14px; }
       :host(.og-compact) .og-list-row { padding: 10px 20px; font-size: 17px; }
+      :host(.og-compact) .og-crossed-action-btn { padding-block: 0; min-height: 30px; font-size: 14px; }
+      :host(.og-compact) .og-add-view-item { height: 32px; font-size: 14px; padding: 4px 16px; }
+      :host(.og-compact) .og-add-view-item-name { font-size: 14px; }
+      :host(.og-compact) .og-add-view-on-list { font-size: 10px; }
+      :host(.og-compact) .og-add-input-wrapper input { height: 30px; font-size: 16px; }
       :host(.og-compact) .og-setting-option { font-size: 13px; padding: 8px 14px; }
       :host(.og-compact) .og-setting-list-option { font-size: 13px; padding: 8px 12px; }
     `;
