@@ -1,5 +1,6 @@
 """Async OurGroceries API client wrapper."""
 
+import asyncio
 import logging
 from functools import wraps
 from typing import Any, Callable, Coroutine
@@ -186,13 +187,13 @@ class OurGroceriesAPI:
         data = await client.get_my_lists()
         lists = data.get("shoppingLists", [])
 
+        valid = [(sl["id"], sl.get("name", "")) for sl in lists if sl.get("id")]
+        results = await asyncio.gather(
+            *(client.get_list_items(lid) for lid, _ in valid)
+        )
+
         item_map: dict[str, list[str]] = {}
-        for sl in lists:
-            list_id = sl.get("id", "")
-            list_name = sl.get("name", "")
-            if not list_id:
-                continue
-            list_data = await client.get_list_items(list_id)
+        for (_, list_name), list_data in zip(valid, results):
             items = list_data.get("list", {}).get("items", [])
             for item in items:
                 if item.get("crossedOff") or item.get("crossedOffAt"):
