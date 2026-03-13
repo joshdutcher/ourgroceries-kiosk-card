@@ -231,6 +231,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       default_list: config.default_list || '',
       admin_pin: config.admin_pin || '',
       density: config.density || 'default',
+      hide_settings: config.hide_settings || false,
     };
     // Overlay per-device localStorage overrides on top of YAML defaults
     try {
@@ -428,9 +429,9 @@ class OurGroceriesKioskCard extends HTMLElement {
     let html = `
       <div class="og-header">
         <span class="og-header-title">Shopping Lists</span>
-        <button class="og-header-icon-btn" id="og-settings-btn" aria-label="Settings">
+        ${this._config.hide_settings ? '' : `<button class="og-header-icon-btn" id="og-settings-btn" aria-label="Settings">
           <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 00-.48-.41h-3.84a.48.48 0 00-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87a.48.48 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-        </button>
+        </button>`}
       </div>
       <div class="og-lists-container">
     `;
@@ -493,9 +494,9 @@ class OurGroceriesKioskCard extends HTMLElement {
           </button>
         ` : ''}
         <span class="og-header-title">${this._escHtml(this._currentListName)}</span>
-        <button class="og-header-icon-btn" id="og-settings-btn" aria-label="Settings">
+        ${this._config.hide_settings ? '' : `<button class="og-header-icon-btn" id="og-settings-btn" aria-label="Settings">
           <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 00-.48-.41h-3.84a.48.48 0 00-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87a.48.48 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-        </button>
+        </button>`}
       </div>
       <div class="og-list-view-body">
         <div class="og-add-item-row" id="og-add-trigger">
