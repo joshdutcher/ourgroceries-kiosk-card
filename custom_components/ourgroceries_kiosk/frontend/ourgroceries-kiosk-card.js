@@ -301,7 +301,7 @@ class OurGroceriesKioskCard extends HTMLElement {
 
     // Load item-list-map in the background (expensive: fetches all lists' items)
     this._ws('ourgroceries_kiosk/get_item_list_map')
-      .then(map => { this._itemListMap = map || {}; })
+      .then(map => { this._itemListMap = map || {}; this._refreshAddViewItems(); })
       .catch(() => {});
   }
 
@@ -353,7 +353,7 @@ class OurGroceriesKioskCard extends HTMLElement {
 
       // Refresh item-list-map in the background (expensive call)
       this._ws('ourgroceries_kiosk/get_item_list_map')
-        .then(map => { this._itemListMap = map || {}; })
+        .then(map => { this._itemListMap = map || {}; this._refreshAddViewItems(); })
         .catch(() => {});
     } catch (err) {
       console.warn('OG Kiosk: poll failed', err);
