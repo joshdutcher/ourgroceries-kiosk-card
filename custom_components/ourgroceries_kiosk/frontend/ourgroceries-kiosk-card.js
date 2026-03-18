@@ -393,6 +393,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   }
 
   _applyDensity() {
+    this.classList.toggle('og-comfortable', this._config.density === 'comfortable');
     this.classList.toggle('og-compact', this._config.density === 'compact');
   }
 
@@ -1343,7 +1344,8 @@ class OurGroceriesKioskCard extends HTMLElement {
         <div class="og-setting-section">
           <div class="og-setting-label">DENSITY</div>
           <div class="og-setting-row">
-            <button class="og-setting-option${this._config.density !== 'compact' ? ' active' : ''}" data-density="default">Default</button>
+            <button class="og-setting-option${this._config.density === 'default' || !this._config.density ? ' active' : ''}" data-density="default">Default</button>
+            <button class="og-setting-option${this._config.density === 'comfortable' ? ' active' : ''}" data-density="comfortable">Comfortable</button>
             <button class="og-setting-option${this._config.density === 'compact' ? ' active' : ''}" data-density="compact">Compact</button>
           </div>
         </div>
@@ -2435,6 +2437,30 @@ class OurGroceriesKioskCard extends HTMLElement {
         text-align: left;
       }
       .og-wizard-list-option:active { border-color: var(--accent-color); }
+
+      /* ---- Comfortable density ---- */
+      :host(.og-comfortable) .og-header { padding-block: 8px; min-height: 44px; }
+      :host(.og-comfortable) .og-header-title { font-size: 22px; }
+      :host(.og-comfortable) .og-header-icon-btn { width: 35px; height: 35px; min-width: 35px; }
+      :host(.og-comfortable) .og-header-icon-btn svg { width: 20px; height: 20px; }
+      :host(.og-comfortable) .og-header-back-btn { width: 35px; height: 35px; min-width: 35px; }
+      :host(.og-comfortable) .og-header-back-btn svg { width: 19px; height: 19px; }
+      :host(.og-comfortable) .og-add-item-row { padding: 8px 16px; }
+      :host(.og-comfortable) .og-add-item-row input { height: 40px; font-size: 16px; }
+      :host(.og-comfortable) .og-item { padding-block: 7px; min-height: 39px; }
+      :host(.og-comfortable) .og-item-name { font-size: 18px; }
+      :host(.og-comfortable) .og-item-menu-btn { height: 37px; min-height: 37px; }
+      :host(.og-comfortable) .og-crossed-item { padding-block: 6px; min-height: 39px; }
+      :host(.og-comfortable) .og-crossed-name { font-size: 17px; }
+      :host(.og-comfortable) .og-category-bar { padding-block: 3px; font-size: 16px; }
+      :host(.og-comfortable) .og-list-row { padding: 13px 20px; font-size: 18px; }
+      :host(.og-comfortable) .og-crossed-action-btn { padding-block: 7px; min-height: 37px; font-size: 15px; }
+      :host(.og-comfortable) .og-add-view-item { padding: 9px 16px; font-size: 17px; }
+      :host(.og-comfortable) .og-add-view-item-name { font-size: 17px; }
+      :host(.og-comfortable) .og-add-view-on-list { font-size: 12px; }
+      :host(.og-comfortable) .og-add-input-wrapper input { height: 36px; font-size: 17px; }
+      :host(.og-comfortable) .og-setting-option { font-size: 15px; padding: 9px 17px; }
+      :host(.og-comfortable) .og-setting-list-option { font-size: 15px; padding: 9px 14px; }
 
       /* ---- Compact density ---- */
       :host(.og-compact) .og-header { padding-block: 0; min-height: 40px; }
