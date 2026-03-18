@@ -72,8 +72,7 @@
 - [ ] Avoid full `innerHTML` replacement on poll-driven list refreshes — consider keyed diffing to only update changed rows, preventing scroll position loss and focus stealing
 
 ### Project Hygiene
-- [ ] Sync manifest.json version (0.1.1) with JS card version (0.1.2)
-- [ ] Add `screenshots/` directory with actual card screenshots (README references `screenshots/card.png` and `screenshots/tablet.png` that don't exist)
+- [ ] Add `screenshots/` directory with actual card screenshots (README references `screenshots/card.png` that doesn't exist)
 - [ ] Add `.env` to `.gitignore` (per global standards)
 - [ ] Add `Zone.Identifier` to `.gitignore` (per global standards, WSL2 artifact)
 
@@ -95,3 +94,5 @@
 | v0.1.1 | 2026-02-18 | Multi-list indicators, dark snackbar, empty state, theme labels |
 | v0.1.2 | 2026-02-18 | Delete confirmation, floating toast, admin PIN redesign, template literal fix |
 | v0.1.10 | 2026-03-12 | Settings list picker: one-per-row, equal-width buttons |
+| v0.1.11 | 2026-03-13 | Compact density styles, fix 'On X list' not appearing until next poll cycle |
+| v0.1.12 | 2026-03-18 | Comfortable density option between Default and Compact |

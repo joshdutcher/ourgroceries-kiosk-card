@@ -11,7 +11,7 @@ A touch-friendly Home Assistant Lovelace card for managing OurGroceries shopping
 - Category grouping with colored bars and a category picker
 - Quantity controls
 - 13 built-in themes + system auto (light/dark)
-- Compact density mode for smaller screens or denser layouts
+- Three density modes: Default, Comfortable, and Compact
 - Autocomplete sorted by your most-added items (server-tracked usage frequency)
 - Crossed-off items sorted by the order they were checked off
 - First-run setup wizard
@@ -64,7 +64,7 @@ views:
 | Option | Values | Description |
 |---|---|---|
 | `theme` | `citrus`, `dark`, `light`, `berries`, `chestnut`, `festival`, `grapevine`, `ice`, `miami`, `old_glory`, `peacock`, `tangerine`, `vino`, `system` | Visual theme |
-| `density` | `default`, `compact` | Layout density — `compact` reduces padding and font sizes for smaller screens |
+| `density` | `default`, `comfortable`, `compact` | Layout density — `comfortable` slightly reduces spacing; `compact` reduces padding and font sizes for smaller screens |
 | `list_mode` | `all`, `single` | Show all lists or lock to one |
 | `locked_list` | list name | Required when `list_mode: single` |
 | `default_list` | list name | Optional — auto-opens this list in `all` mode |
