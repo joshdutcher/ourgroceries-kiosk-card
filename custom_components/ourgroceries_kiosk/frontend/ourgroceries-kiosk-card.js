@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.18';
+const OG_CARD_VERSION = '0.1.19';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -2309,7 +2309,8 @@ class OurGroceriesKioskCard extends HTMLElement {
       .og-add-view-thumb {
         width: 44px; height: 44px; flex-shrink: 0;
         object-fit: cover; border-radius: 4px;
-        margin-left: 8px; pointer-events: none;
+        margin-left: auto; padding-left: 8px;
+        pointer-events: none;
       }
 
       /* ---- Edit view note ---- */
