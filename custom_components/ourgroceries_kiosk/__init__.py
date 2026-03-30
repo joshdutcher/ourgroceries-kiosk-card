@@ -2,10 +2,12 @@
 
 import logging
 import os
+import re
 
 import voluptuous as vol
+from aiohttp import web
 from homeassistant.components import websocket_api
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import HomeAssistantView, StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
@@ -63,6 +65,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register WebSocket handlers
     _register_websocket_handlers(hass)
 
+    # Register photo proxy endpoint
+    hass.http.register_view(OurGroceriesPhotoView())
+
     return True
 
 
@@ -96,6 +101,31 @@ async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
     hass.data.setdefault("frontend_extra_module_url", set())
     if url not in hass.data["frontend_extra_module_url"]:
         hass.data["frontend_extra_module_url"].add(url)
+
+
+class OurGroceriesPhotoView(HomeAssistantView):
+    """Proxy OurGroceries item photos through HA."""
+
+    url = "/api/ourgroceries_kiosk/photo/{photo_id}"
+    name = "api:ourgroceries_kiosk:photo"
+    requires_auth = True
+
+    _PHOTO_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+    async def get(self, request: web.Request, photo_id: str) -> web.Response:
+        if not self._PHOTO_ID_RE.match(photo_id):
+            return web.Response(status=400, text="Invalid photo ID")
+        hass = request.app["hass"]
+        api = _get_api(hass)
+        try:
+            data, content_type = await api.fetch_photo(photo_id)
+            return web.Response(
+                body=data,
+                content_type=content_type,
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+        except Exception:
+            return web.Response(status=404, text="Photo not found")
 
 
 def _get_api(hass: HomeAssistant) -> OurGroceriesAPI:

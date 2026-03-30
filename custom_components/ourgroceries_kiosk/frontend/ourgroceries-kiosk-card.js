@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.14';
+const OG_CARD_VERSION = '0.1.15';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -578,7 +578,7 @@ class OurGroceriesKioskCard extends HTMLElement {
               <span class="og-item-name">${this._escHtml(item.name)}</span>
               ${item.note ? `<span class="og-item-note">${this._escHtml(item.note)}</span>` : ''}
             </div>
-            ${item.image_url ? `<img class="og-item-thumb" src="${this._escAttr(item.image_url)}" data-url="${this._escAttr(item.image_url)}" data-name="${this._escAttr(item.name)}" alt="" loading="lazy" />` : ''}
+            ${item.photo_id ? `<img class="og-item-thumb" src="/api/ourgroceries_kiosk/photo/${this._escAttr(item.photo_id)}" data-photo-id="${this._escAttr(item.photo_id)}" data-name="${this._escAttr(item.name)}" alt="" loading="lazy" />` : ''}
             <button class="og-item-menu-btn" data-id="${this._escAttr(item.id)}" aria-label="Edit">
               <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
             </button>
@@ -605,7 +605,7 @@ class OurGroceriesKioskCard extends HTMLElement {
     container.querySelectorAll('.og-item-thumb').forEach(img => {
       img.addEventListener('click', (e) => {
         e.stopPropagation();
-        this._showImageLightbox(img.dataset.url, img.dataset.name);
+        this._showImageLightbox(`/api/ourgroceries_kiosk/photo/${img.dataset.photoId}`, img.dataset.name);
       });
     });
 
@@ -839,7 +839,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   }
 
   _buildAddViewHtml() {
-    const imageMap = {};
+    const photoMap = {};
     const seen = new Set();
     const allItems = [];
     for (const mi of this._masterItems) {
@@ -849,7 +849,7 @@ class OurGroceriesKioskCard extends HTMLElement {
         seen.add(key);
         allItems.push({ name: name.trim(), addedCount: (mi && mi.added_count) || 0 });
       }
-      if (mi && mi.image_url) imageMap[key] = mi.image_url;
+      if (mi && mi.photo_id) photoMap[key] = mi.photo_id;
     }
     allItems.sort((a, b) => b.addedCount - a.addedCount);
     let html = '';
@@ -857,7 +857,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       const name = entry.name;
       const key = name.toLowerCase();
       const lists = this._itemListMap[key] || [];
-      const imageUrl = imageMap[key] || '';
+      const photoId = photoMap[key] || '';
       let subtitle = '';
       if (lists.length === 1) {
         subtitle = `<span class="og-add-view-on-list">On ${this._escHtml(lists[0])} list</span>`;
@@ -870,7 +870,7 @@ class OurGroceriesKioskCard extends HTMLElement {
             <span class="og-add-view-item-name">${this._escHtml(name)}</span>
             ${subtitle}
           </div>
-          ${imageUrl ? `<img class="og-add-view-thumb" src="${this._escAttr(imageUrl)}" alt="" loading="lazy" />` : ''}
+          ${photoId ? `<img class="og-add-view-thumb" src="/api/ourgroceries_kiosk/photo/${this._escAttr(photoId)}" alt="" loading="lazy" />` : ''}
         </button>
       `;
     }

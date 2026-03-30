@@ -5,6 +5,7 @@ import logging
 from functools import wraps
 from typing import Any, Callable, Coroutine
 
+import aiohttp
 import ourgroceries as og
 
 _LOGGER = logging.getLogger(__name__)
@@ -87,14 +88,8 @@ class OurGroceriesAPI:
         client = await self._ensure_login()
         data = await client.get_list_items(list_id)
         items = data.get("list", {}).get("items", [])
-        if items:
-            _LOGGER.warning("OG Kiosk DEBUG: raw item keys: %s", list(items[0].keys()))
-            _LOGGER.warning("OG Kiosk DEBUG: raw first item: %s", items[0])
         result = []
         for item in items:
-            # The OurGroceries API no longer returns a boolean "crossedOff".
-            # Instead, crossed-off items have a "crossedOffAt" timestamp.
-            # Fall back to the legacy "crossedOff" field if present.
             crossed = bool(
                 item.get("crossedOff")
                 or item.get("crossedOffAt")
@@ -106,7 +101,7 @@ class OurGroceriesAPI:
                 "crossed_off_at": item.get("crossedOffAt", 0),
                 "category_id": item.get("categoryId", ""),
                 "note": item.get("note", ""),
-                "image_url": item.get("imageUrl", ""),
+                "photo_id": item.get("photoId", ""),
             })
         return result
 
@@ -171,7 +166,7 @@ class OurGroceriesAPI:
             {
                 "name": item.get("value", ""),
                 "added_count": item.get("addedCount", 0),
-                "image_url": item.get("imageUrl", ""),
+                "photo_id": item.get("photoId", ""),
             }
             for item in master_items
             if item.get("value", "").strip()
@@ -261,3 +256,17 @@ class OurGroceriesAPI:
                         list_id, li["id"], category_id, li["value"]
                     )
                     break
+
+    @_auto_reauth
+    async def fetch_photo(self, photo_id: str) -> tuple[bytes, str]:
+        """Fetch a photo by ID. Returns (image_bytes, content_type)."""
+        client = await self._ensure_login()
+        url = f"https://www.ourgroceries.com/your-lists/photo/{photo_id}"
+        cookies = {"ourgroceries-auth": client._session_key}
+        async with aiohttp.ClientSession(cookies=cookies) as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    raise ValueError(f"Photo fetch failed: {resp.status}")
+                content_type = resp.content_type or "image/jpeg"
+                data = await resp.read()
+                return data, content_type
