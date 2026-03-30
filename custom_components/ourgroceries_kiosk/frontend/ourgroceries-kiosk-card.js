@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.17';
+const OG_CARD_VERSION = '0.1.18';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -2107,6 +2107,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       }
       .og-add-view-item:active { opacity: 0.7; }
       .og-add-view-item-text {
+        flex: 1; min-width: 0;
         display: flex; flex-direction: column; gap: 2px;
       }
       .og-add-view-item-name {
