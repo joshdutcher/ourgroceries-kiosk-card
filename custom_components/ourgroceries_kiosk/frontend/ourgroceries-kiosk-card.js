@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.12';
+const OG_CARD_VERSION = '0.1.13';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -574,7 +574,11 @@ class OurGroceriesKioskCard extends HTMLElement {
       for (const item of items) {
         html += `
           <div class="og-item" data-id="${this._escAttr(item.id)}">
-            <span class="og-item-name" data-id="${this._escAttr(item.id)}">${this._escHtml(item.name)}</span>
+            <div class="og-item-content" data-id="${this._escAttr(item.id)}">
+              <span class="og-item-name">${this._escHtml(item.name)}</span>
+              ${item.note ? `<span class="og-item-note">${this._escHtml(item.note)}</span>` : ''}
+            </div>
+            ${item.image_url ? `<img class="og-item-thumb" src="${this._escAttr(item.image_url)}" data-url="${this._escAttr(item.image_url)}" data-name="${this._escAttr(item.name)}" alt="" loading="lazy" />` : ''}
             <button class="og-item-menu-btn" data-id="${this._escAttr(item.id)}" aria-label="Edit">
               <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="5" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
             </button>
@@ -589,11 +593,19 @@ class OurGroceriesKioskCard extends HTMLElement {
 
     container.innerHTML = html;
 
-    // Bind tap-to-cross-off on item names
-    container.querySelectorAll('.og-item-name').forEach(el => {
+    // Bind tap-to-cross-off on item content area
+    container.querySelectorAll('.og-item-content').forEach(el => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         this._toggleCrossedOff(el.dataset.id, true);
+      });
+    });
+
+    // Bind thumbnail tap to open image lightbox
+    container.querySelectorAll('.og-item-thumb').forEach(img => {
+      img.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._showImageLightbox(img.dataset.url, img.dataset.name);
       });
     });
 
@@ -720,6 +732,31 @@ class OurGroceriesKioskCard extends HTMLElement {
     }
   }
 
+  /* ---- Image lightbox ---- */
+
+  _showImageLightbox(imageUrl, itemName) {
+    const root = this._getRoot();
+    if (!root) return;
+    const existing = root.querySelector('.og-image-lightbox');
+    if (existing) existing.remove();
+    const lightbox = document.createElement('div');
+    lightbox.className = 'og-image-lightbox';
+    lightbox.innerHTML = `
+      <div class="og-lightbox-header">
+        <button class="og-lightbox-back-btn" id="og-lightbox-back" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+        </button>
+        <span class="og-lightbox-title">${this._escHtml(itemName)}</span>
+      </div>
+      <div class="og-lightbox-body">
+        <img class="og-lightbox-img" src="${this._escAttr(imageUrl)}" alt="${this._escAttr(itemName)}" />
+      </div>
+    `;
+    lightbox.querySelector('#og-lightbox-back').addEventListener('click', () => lightbox.remove());
+    lightbox.querySelector('.og-lightbox-body').addEventListener('click', () => lightbox.remove());
+    root.appendChild(lightbox);
+  }
+
   /* ---- Add / Remove item ---- */
 
   async _addItem(name) {
@@ -802,9 +839,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   }
 
   _buildAddViewHtml() {
-    const currentNamesLower = new Set(
-      this._items.filter(i => !i.crossed_off).map(i => i.name.toLowerCase())
-    );
+    const imageMap = {};
     const seen = new Set();
     const allItems = [];
     for (const mi of this._masterItems) {
@@ -814,6 +849,7 @@ class OurGroceriesKioskCard extends HTMLElement {
         seen.add(key);
         allItems.push({ name: name.trim(), addedCount: (mi && mi.added_count) || 0 });
       }
+      if (mi && mi.image_url) imageMap[key] = mi.image_url;
     }
     allItems.sort((a, b) => b.addedCount - a.addedCount);
     let html = '';
@@ -821,6 +857,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       const name = entry.name;
       const key = name.toLowerCase();
       const lists = this._itemListMap[key] || [];
+      const imageUrl = imageMap[key] || '';
       let subtitle = '';
       if (lists.length === 1) {
         subtitle = `<span class="og-add-view-on-list">On ${this._escHtml(lists[0])} list</span>`;
@@ -833,6 +870,7 @@ class OurGroceriesKioskCard extends HTMLElement {
             <span class="og-add-view-item-name">${this._escHtml(name)}</span>
             ${subtitle}
           </div>
+          ${imageUrl ? `<img class="og-add-view-thumb" src="${this._escAttr(imageUrl)}" alt="" loading="lazy" />` : ''}
         </button>
       `;
     }
@@ -1046,6 +1084,7 @@ class OurGroceriesKioskCard extends HTMLElement {
           <span id="og-edit-cat-name" class="og-edit-cat-value">${this._escHtml(this._editItemCategory)}</span>
           <svg class="og-cat-chevron" viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
         </button>
+        ${this._editingItem.note ? `<div class="og-edit-note">${this._escHtml(this._editingItem.note)}</div>` : ''}
         ${this._editingItem.crossed_off ? `
           <button id="og-uncross-btn" class="og-uncross-single-btn">Mark as active</button>
         ` : ''}
@@ -2247,6 +2286,73 @@ class OurGroceriesKioskCard extends HTMLElement {
       }
       .og-uncross-single-btn:active { opacity: 0.7; }
 
+      /* ---- Item note & thumbnail ---- */
+      .og-item-content {
+        flex: 1;
+        display: flex; flex-direction: column; gap: 3px;
+        cursor: pointer; min-width: 0;
+      }
+      .og-item-note {
+        font-size: 14px; line-height: 1.3;
+        color: var(--crossed-off-text);
+        word-break: break-word;
+      }
+      .og-item-thumb {
+        width: 44px; height: 44px; flex-shrink: 0;
+        object-fit: cover; border-radius: 4px;
+        cursor: pointer; margin-left: 8px;
+      }
+      .og-item-thumb:active { opacity: 0.8; }
+
+      /* ---- Add view thumbnail ---- */
+      .og-add-view-thumb {
+        width: 44px; height: 44px; flex-shrink: 0;
+        object-fit: cover; border-radius: 4px;
+        margin-left: 8px; pointer-events: none;
+      }
+
+      /* ---- Edit view note ---- */
+      .og-edit-note {
+        width: 100%; box-sizing: border-box;
+        padding: 14px;
+        border: 1px solid var(--divider-color);
+        border-radius: 8px; background: var(--item-bg);
+        color: var(--text-primary); font-size: 16px;
+        line-height: 1.5; word-break: break-word;
+      }
+
+      /* ---- Image lightbox ---- */
+      .og-image-lightbox {
+        position: absolute; inset: 0; z-index: 200;
+        background: #000;
+        display: flex; flex-direction: column;
+      }
+      .og-lightbox-header {
+        position: absolute; top: 0; left: 0; right: 0;
+        z-index: 10;
+        background: rgba(0,0,0,0.55);
+        padding: 14px 16px;
+        display: flex; align-items: center; gap: 8px;
+        min-height: 52px;
+      }
+      .og-lightbox-back-btn {
+        border: none; background: transparent; color: #fff;
+        cursor: pointer; display: flex; align-items: center;
+        padding: 8px; touch-action: manipulation; flex-shrink: 0;
+      }
+      .og-lightbox-back-btn:active { opacity: 0.7; }
+      .og-lightbox-title {
+        color: #fff; font-size: 16px; font-weight: 600;
+        flex: 1; word-break: break-word;
+      }
+      .og-lightbox-body {
+        flex: 1; display: flex; align-items: center; justify-content: center;
+        overflow: hidden; cursor: pointer;
+      }
+      .og-lightbox-img {
+        max-width: 100%; max-height: 100%; object-fit: contain;
+      }
+
       /* ---- Category picker ---- */
       .og-category-picker-header {
         background: var(--header-bg);
@@ -2449,6 +2555,9 @@ class OurGroceriesKioskCard extends HTMLElement {
       :host(.og-comfortable) .og-add-item-row input { height: 40px; font-size: 16px; }
       :host(.og-comfortable) .og-item { padding-block: 7px; min-height: 39px; }
       :host(.og-comfortable) .og-item-name { font-size: 18px; }
+      :host(.og-comfortable) .og-item-note { font-size: 13px; }
+      :host(.og-comfortable) .og-item-thumb { width: 40px; height: 40px; }
+      :host(.og-comfortable) .og-add-view-thumb { width: 40px; height: 40px; }
       :host(.og-comfortable) .og-item-menu-btn { height: 37px; min-height: 37px; }
       :host(.og-comfortable) .og-crossed-item { padding-block: 6px; min-height: 39px; }
       :host(.og-comfortable) .og-crossed-name { font-size: 17px; }
@@ -2473,6 +2582,9 @@ class OurGroceriesKioskCard extends HTMLElement {
       :host(.og-compact) .og-add-item-row input { height: 32px; font-size: 14px; }
       :host(.og-compact) .og-item { padding-block: 0; min-height: 30px; }
       :host(.og-compact) .og-item-name { font-size: 14px; }
+      :host(.og-compact) .og-item-note { font-size: 11px; }
+      :host(.og-compact) .og-item-thumb { width: 32px; height: 32px; }
+      :host(.og-compact) .og-add-view-thumb { width: 32px; height: 32px; }
       :host(.og-compact) .og-item-menu-btn { height: 30px; min-height: 30px; }
       :host(.og-compact) .og-crossed-item { padding-block: 0; min-height: 30px; }
       :host(.og-compact) .og-crossed-name { font-size: 14px; }

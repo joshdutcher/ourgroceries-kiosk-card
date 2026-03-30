@@ -96,3 +96,4 @@
 | v0.1.10 | 2026-03-12 | Settings list picker: one-per-row, equal-width buttons |
 | v0.1.11 | 2026-03-13 | Compact density styles, fix 'On X list' not appearing until next poll cycle |
 | v0.1.12 | 2026-03-18 | Comfortable density option between Default and Compact |
+| v0.1.13 | 2026-03-30 | Item notes and image thumbnails in list, add, and edit views |
