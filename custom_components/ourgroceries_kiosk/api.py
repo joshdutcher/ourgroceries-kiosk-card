@@ -87,6 +87,9 @@ class OurGroceriesAPI:
         client = await self._ensure_login()
         data = await client.get_list_items(list_id)
         items = data.get("list", {}).get("items", [])
+        if items:
+            _LOGGER.warning("OG Kiosk DEBUG: raw item keys: %s", list(items[0].keys()))
+            _LOGGER.warning("OG Kiosk DEBUG: raw first item: %s", items[0])
         result = []
         for item in items:
             # The OurGroceries API no longer returns a boolean "crossedOff".
