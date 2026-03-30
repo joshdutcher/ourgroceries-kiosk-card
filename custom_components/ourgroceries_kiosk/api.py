@@ -88,6 +88,11 @@ class OurGroceriesAPI:
         client = await self._ensure_login()
         data = await client.get_list_items(list_id)
         items = data.get("list", {}).get("items", [])
+        for item in items:
+            if item.get("note") or item.get("notes"):
+                _LOGGER.warning("OG Kiosk DEBUG note item: %s", item)
+            if item.get("photoId"):
+                _LOGGER.warning("OG Kiosk DEBUG photo item: %s", {k: v for k, v in item.items() if k in ('value', 'photoId')})
         result = []
         for item in items:
             crossed = bool(
