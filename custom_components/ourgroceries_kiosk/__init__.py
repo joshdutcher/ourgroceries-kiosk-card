@@ -108,7 +108,7 @@ class OurGroceriesPhotoView(HomeAssistantView):
 
     url = "/api/ourgroceries_kiosk/photo/{photo_id}"
     name = "api:ourgroceries_kiosk:photo"
-    requires_auth = True
+    requires_auth = False
 
     _PHOTO_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
