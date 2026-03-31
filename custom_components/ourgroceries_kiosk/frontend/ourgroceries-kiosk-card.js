@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.19';
+const OG_CARD_VERSION = '0.1.20';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -187,6 +187,7 @@ class OurGroceriesKioskCard extends HTMLElement {
     this._categoryNameToId = {};
     this._categoryIdMap = {};
     this._masterItems = [];
+    this._masterNotes = {};
     this._itemListMap = {};
 
     // State
@@ -280,6 +281,8 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._categoryNameToId = catResult.category_name_to_id || {};
       this._categoryIdMap = catResult.category_id_map || {};
       this._masterItems = catResult.master_items || [];
+      this._masterNotes = {};
+      for (const mi of this._masterItems) { if (mi.note) this._masterNotes[mi.name.trim().toLowerCase()] = mi.note; }
     } catch (err) {
       console.error('OG Kiosk: initial load failed', err);
       this._lists = [];
@@ -339,6 +342,8 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._categoryNameToId = catResult.category_name_to_id || {};
       this._categoryIdMap = catResult.category_id_map || {};
       this._masterItems = catResult.master_items || [];
+      this._masterNotes = {};
+      for (const mi of this._masterItems) { if (mi.note) this._masterNotes[mi.name.trim().toLowerCase()] = mi.note; }
 
       if (this._view === 'lists') this._renderLists();
       else if (this._view === 'list' && this._currentListId) {
@@ -572,11 +577,12 @@ class OurGroceriesKioskCard extends HTMLElement {
       html += `<div class="og-category-bar">${this._escHtml(cat)}</div>`;
 
       for (const item of items) {
+        const note = item.note || this._masterNotes[item.name.trim().toLowerCase()] || '';
         html += `
           <div class="og-item" data-id="${this._escAttr(item.id)}">
             <div class="og-item-content" data-id="${this._escAttr(item.id)}">
               <span class="og-item-name">${this._escHtml(item.name)}</span>
-              ${item.note ? `<span class="og-item-note">${this._escHtml(item.note)}</span>` : ''}
+              ${note ? `<span class="og-item-note">${this._escHtml(note)}</span>` : ''}
             </div>
             ${item.photo_id ? `<img class="og-item-thumb" src="/api/ourgroceries_kiosk/photo/${this._escAttr(item.photo_id)}" data-photo-id="${this._escAttr(item.photo_id)}" data-name="${this._escAttr(item.name)}" alt="" loading="lazy" />` : ''}
             <button class="og-item-menu-btn" data-id="${this._escAttr(item.id)}" aria-label="Edit">
@@ -858,6 +864,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       const key = name.toLowerCase();
       const lists = this._itemListMap[key] || [];
       const photoId = photoMap[key] || '';
+      const note = this._masterNotes[key] || '';
       let subtitle = '';
       if (lists.length === 1) {
         subtitle = `<span class="og-add-view-on-list">On ${this._escHtml(lists[0])} list</span>`;
@@ -868,6 +875,7 @@ class OurGroceriesKioskCard extends HTMLElement {
         <button class="og-add-view-item" data-name="${this._escAttr(name)}">
           <div class="og-add-view-item-text">
             <span class="og-add-view-item-name">${this._escHtml(name)}</span>
+            ${note ? `<span class="og-add-view-note">${this._escHtml(note)}</span>` : ''}
             ${subtitle}
           </div>
           ${photoId ? `<img class="og-add-view-thumb" src="/api/ourgroceries_kiosk/photo/${this._escAttr(photoId)}" alt="" loading="lazy" />` : ''}
@@ -1049,7 +1057,9 @@ class OurGroceriesKioskCard extends HTMLElement {
     const item = this._items.find(i => i.id === itemId);
     if (!item) return;
     this._editingItem = { ...item };
+    this._editingItem.note = item.note || this._masterNotes[item.name.trim().toLowerCase()] || '';
     this._editNameDirty = false;
+    this._editNoteDirty = false;
     this._editItemCategory = this._masterCategories[item.name.trim().toLowerCase()] || (item.category_id && this._categoryIdMap[item.category_id]) || 'Uncategorized';
     this._renderEditView();
   }
@@ -1084,7 +1094,9 @@ class OurGroceriesKioskCard extends HTMLElement {
           <span id="og-edit-cat-name" class="og-edit-cat-value">${this._escHtml(this._editItemCategory)}</span>
           <svg class="og-cat-chevron" viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
         </button>
-        ${this._editingItem.note ? `<div class="og-edit-note">${this._escHtml(this._editingItem.note)}</div>` : ''}
+        <input id="og-edit-note" class="og-edit-note" type="text" placeholder="Add a note..."
+               value="${this._escAttr(this._editingItem.note || '')}"
+               autocomplete="off" autocorrect="on" autocapitalize="sentences" />
         ${this._editingItem.crossed_off ? `
           <button id="og-uncross-btn" class="og-uncross-single-btn">Mark as active</button>
         ` : ''}
@@ -1118,6 +1130,12 @@ class OurGroceriesKioskCard extends HTMLElement {
       if (this._editNameDirty && this._editingItem) this._handleEditNameSave();
     });
 
+    const noteInput = root.querySelector('#og-edit-note');
+    noteInput.addEventListener('input', () => { this._editNoteDirty = true; });
+    noteInput.addEventListener('blur', () => {
+      if (this._editNoteDirty && this._editingItem) this._handleEditNoteSave();
+    });
+
     root.querySelector('#og-less-btn').addEventListener('click', () => this._handleQty(-1));
     root.querySelector('#og-more-btn').addEventListener('click', () => this._handleQty(1));
     root.querySelector('#og-edit-cat-btn').addEventListener('click', () => this._renderCategoryPicker());
@@ -1146,6 +1164,7 @@ class OurGroceriesKioskCard extends HTMLElement {
 
   _handleEditBack() {
     if (this._editNameDirty && this._editingItem) this._handleEditNameSave();
+    if (this._editNoteDirty && this._editingItem) this._handleEditNoteSave();
     this._editingItem = null;
     const returnToAdd = this._editReturnView === 'add';
     this._editReturnView = null;
@@ -1173,6 +1192,27 @@ class OurGroceriesKioskCard extends HTMLElement {
       this._editNameDirty = false;
     } catch (err) {
       console.error('OG Kiosk: rename failed', err);
+    }
+  }
+
+  async _handleEditNoteSave() {
+    if (!this._editingItem || !this._currentListId) return;
+    const root = this._getRoot();
+    const textarea = root.querySelector('#og-edit-note');
+    const newNote = textarea ? textarea.value : '';
+    this._editNoteDirty = false;
+
+    try {
+      await this._ws('ourgroceries_kiosk/update_item_note', {
+        list_id: this._currentListId, item_id: this._editingItem.id,
+        item_name: this._editingItem.name, note: newNote,
+      });
+      const localItem = this._items.find(i => i.id === this._editingItem.id);
+      if (localItem) localItem.note = newNote;
+      this._editingItem.note = newNote;
+      this._masterNotes[this._editingItem.name.trim().toLowerCase()] = newNote;
+    } catch (err) {
+      console.error('OG Kiosk: note save failed', err);
     }
   }
 
@@ -2113,6 +2153,10 @@ class OurGroceriesKioskCard extends HTMLElement {
       .og-add-view-item-name {
         font-size: 20px; line-height: 1.3;
       }
+      .og-add-view-note {
+        font-size: 14px; color: var(--crossed-off-text);
+        font-style: italic;
+      }
       .og-add-view-on-list {
         font-size: 14px; color: var(--crossed-off-text);
       }
@@ -2316,12 +2360,14 @@ class OurGroceriesKioskCard extends HTMLElement {
       /* ---- Edit view note ---- */
       .og-edit-note {
         width: 100%; box-sizing: border-box;
-        padding: 14px;
+        height: 52px; padding: 0 14px;
         border: 1px solid var(--divider-color);
         border-radius: 8px; background: var(--item-bg);
-        color: var(--text-primary); font-size: 16px;
-        line-height: 1.5; word-break: break-word;
+        color: var(--text-primary); font-size: 18px;
+        outline: none;
       }
+      .og-edit-note:focus { border-color: var(--accent-color); }
+      .og-edit-note::placeholder { color: var(--crossed-off-text); opacity: 0.8; }
 
       /* ---- Image lightbox ---- */
       .og-image-lightbox {

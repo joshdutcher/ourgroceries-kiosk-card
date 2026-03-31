@@ -88,11 +88,6 @@ class OurGroceriesAPI:
         client = await self._ensure_login()
         data = await client.get_list_items(list_id)
         items = data.get("list", {}).get("items", [])
-        for item in items:
-            if item.get("note") or item.get("notes"):
-                _LOGGER.warning("OG Kiosk DEBUG note item: %s", item)
-            if item.get("photoId"):
-                _LOGGER.warning("OG Kiosk DEBUG photo item: %s", {k: v for k, v in item.items() if k in ('value', 'photoId')})
         result = []
         for item in items:
             crossed = bool(
@@ -172,6 +167,7 @@ class OurGroceriesAPI:
                 "name": item.get("value", ""),
                 "added_count": item.get("addedCount", 0),
                 "photo_id": item.get("photoId", ""),
+                "note": item.get("note", ""),
             }
             for item in master_items
             if item.get("value", "").strip()
@@ -261,6 +257,36 @@ class OurGroceriesAPI:
                         list_id, li["id"], category_id, li["value"]
                     )
                     break
+
+    @_auto_reauth
+    async def update_item_note(
+        self,
+        list_id: str,
+        item_id: str,
+        item_name: str,
+        note: str,
+    ) -> None:
+        """Update the note on an item via direct API call."""
+        client = await self._ensure_login()
+        payload = {
+            "command": "changeItemValue",
+            "teamId": client._team_id,
+            "listId": list_id,
+            "itemId": item_id,
+            "newValue": item_name,
+            "note": note,
+        }
+        cookies = {"ourgroceries-auth": client._session_key}
+        async with aiohttp.ClientSession(cookies=cookies) as session:
+            async with session.post(
+                "https://www.ourgroceries.com/your-lists/",
+                json=payload,
+            ) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    raise ValueError(
+                        f"Note update failed: {resp.status} {text}"
+                    )
 
     @_auto_reauth
     async def fetch_photo(self, photo_id: str) -> tuple[bytes, str]:
