@@ -14,8 +14,9 @@ deploy:
 	sudo cp -r custom_components/ourgroceries_kiosk $(HA_COMPONENTS_DIR)/
 	sudo docker restart homeassistant
 
-## Copy only the JS card to HA instance (JS-only changes — hard refresh browser)
+## Copy only the JS card to HA instance and restart (cache-busted on restart)
 deploy-js:
 	sudo cp custom_components/ourgroceries_kiosk/frontend/ourgroceries-kiosk-card.js \
 		$(HA_COMPONENTS_DIR)/ourgroceries_kiosk/frontend/
-	@echo "JS deployed. Hard refresh the browser (Ctrl+Shift+R)."
+	sudo docker restart homeassistant
+	@echo "JS deployed + HA restarting. Refresh browser after HA is back up."

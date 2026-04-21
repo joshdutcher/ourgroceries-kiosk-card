@@ -5,7 +5,7 @@
  * Vanilla HTMLElement / Shadow DOM — no build step.
  */
 
-const OG_CARD_VERSION = '0.1.20';
+const OG_CARD_VERSION = '0.1.21';
 
 /* ------------------------------------------------------------------ */
 /*  Themes                                                             */
@@ -211,15 +211,24 @@ class OurGroceriesKioskCard extends HTMLElement {
     // System theme listener
     this._mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     this._onSystemThemeChange = () => { if (this._config.theme === 'system') this._applyTheme(); };
+    this._onViewportResize = () => this._applyAdminAddViewHeight();
   }
 
   connectedCallback() {
     this._mediaQuery.addEventListener('change', this._onSystemThemeChange);
+    window.addEventListener('resize', this._onViewportResize);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', this._onViewportResize);
+    }
     if (this._domBuilt) this._startPolling();
   }
 
   disconnectedCallback() {
     this._mediaQuery.removeEventListener('change', this._onSystemThemeChange);
+    window.removeEventListener('resize', this._onViewportResize);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', this._onViewportResize);
+    }
     this._stopPolling();
     if (this._statusTimeoutId) clearTimeout(this._statusTimeoutId);
   }
@@ -250,6 +259,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   set hass(hass) {
     const firstSet = !this._hass;
     this._hass = hass;
+    this.classList.toggle('og-admin', !!(hass && hass.user && hass.user.is_admin));
     if (firstSet) {
       this._buildDom();
       this._initialLoad();
@@ -424,12 +434,32 @@ class OurGroceriesKioskCard extends HTMLElement {
 
   _getRoot() { return this.shadowRoot && this.shadowRoot.getElementById('og-root'); }
 
+  _setView(v) {
+    this._view = v;
+    this.classList.toggle('og-adding', v === 'add');
+  }
+
+  _isAdmin() {
+    return !!(this._hass && this._hass.user && this._hass.user.is_admin);
+  }
+
+  _applyAdminAddViewHeight() {
+    if (this._view !== 'add' || !this._isAdmin()) return;
+    const root = this._getRoot();
+    const el = root && root.querySelector('.og-add-view-scroll');
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    const available = Math.max(240, vh - Math.max(0, rect.top) - 8);
+    el.style.maxHeight = available + 'px';
+  }
+
   /* ---- View: List of Lists ---- */
 
   _renderLists() {
     const root = this._getRoot();
     if (!root) return;
-    this._view = 'lists';
+    this._setView('lists');
 
     let html = `
       <div class="og-header">
@@ -487,7 +517,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   _renderListView() {
     const root = this._getRoot();
     if (!root) return;
-    this._view = 'list';
+    this._setView('list');
 
     const showBack = this._config.list_mode !== 'single';
 
@@ -813,22 +843,22 @@ class OurGroceriesKioskCard extends HTMLElement {
   _showAddView() {
     const root = this._getRoot();
     if (!root) return;
-    this._view = 'add';
+    this._setView('add');
 
     // Render the header + input immediately so the view appears instantly
     root.innerHTML = `
-      <div class="og-header og-add-header">
-        <button class="og-header-back-btn" id="og-add-back" aria-label="Back">
-          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-        </button>
-        <div class="og-add-input-wrapper">
-          <input id="og-add-input" type="text" placeholder="Find or add item" autocomplete="off" autocorrect="on" autocapitalize="sentences" />
-          <button id="og-add-clear" class="og-add-clear-btn hidden" aria-label="Clear">
-            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      <div class="og-add-view-scroll">
+        <div class="og-header og-add-header">
+          <button class="og-header-back-btn" id="og-add-back" aria-label="Back">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
           </button>
+          <div class="og-add-input-wrapper">
+            <input id="og-add-input" type="text" placeholder="Find or add item" autocomplete="off" autocorrect="on" autocapitalize="sentences" />
+            <button id="og-add-clear" class="og-add-clear-btn hidden" aria-label="Clear">
+              <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+          </div>
         </div>
-      </div>
-      <div class="og-add-view-body-wrapper">
         <div id="og-add-toast" class="og-add-toast hidden"></div>
         <div id="og-add-items" class="og-add-view-body"></div>
       </div>
@@ -841,7 +871,10 @@ class OurGroceriesKioskCard extends HTMLElement {
     if (input) setTimeout(() => input.focus(), 50);
 
     // Populate item list on next frame so the header paints immediately
-    requestAnimationFrame(() => this._populateAddViewItems());
+    requestAnimationFrame(() => {
+      this._populateAddViewItems();
+      this._applyAdminAddViewHeight();
+    });
   }
 
   _buildAddViewHtml() {
@@ -964,18 +997,25 @@ class OurGroceriesKioskCard extends HTMLElement {
     const container = root.querySelector('#og-add-items');
     if (!container) return;
 
-    const items = container.querySelectorAll('.og-add-view-item');
+    const items = Array.from(container.querySelectorAll('.og-add-view-item'));
     const q = query.toLowerCase();
 
     if (!q) {
-      items.forEach(item => { item.style.display = ''; });
+      items.forEach(item => { item.style.display = ''; item.style.order = ''; });
       return;
     }
 
-    items.forEach(item => {
+    const scored = [];
+    for (const item of items) {
       const name = item.dataset.name || '';
       const score = this._fuzzyScore(name, q);
-      item.style.display = score > 0 ? '' : 'none';
+      scored.push({ item, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+
+    scored.forEach((entry, i) => {
+      entry.item.style.display = entry.score > 0 ? '' : 'none';
+      entry.item.style.order = i;
     });
   }
 
@@ -1067,7 +1107,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   _renderEditView() {
     const root = this._getRoot();
     if (!root) return;
-    this._view = 'edit';
+    this._setView('edit');
 
     root.innerHTML = `
       <div class="og-edit-header">
@@ -1256,7 +1296,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   _renderCategoryPicker() {
     const root = this._getRoot();
     if (!root) return;
-    this._view = 'categories';
+    this._setView('categories');
 
     let categories = this._allCategories.length > 0
       ? [...this._allCategories]
@@ -1381,7 +1421,7 @@ class OurGroceriesKioskCard extends HTMLElement {
     const root = this._getRoot();
     if (!root) return;
     const prevView = this._view;
-    this._view = 'settings';
+    this._setView('settings');
 
     const isAdmin = !!(this._hass && this._hass.user && this._hass.user.is_admin);
     const hasPin = !!this._config.admin_pin;
@@ -1603,7 +1643,7 @@ class OurGroceriesKioskCard extends HTMLElement {
   _renderWizard() {
     const root = this._getRoot();
     if (!root) return;
-    this._view = 'wizard';
+    this._setView('wizard');
 
     if (this._wizardStep === 1) {
       const themeKeys = ['system', ...Object.keys(THEMES)];
@@ -1818,13 +1858,11 @@ class OurGroceriesKioskCard extends HTMLElement {
 
   _fuzzyScore(text, query) {
     const lower = text.toLowerCase();
+    if (lower === query) return 200;
     if (lower.startsWith(query)) return 100 + (1 / text.length);
     const words = lower.split(/\s+/);
     for (const w of words) { if (w.startsWith(query)) return 80 + (1 / text.length); }
     if (lower.includes(query)) return 60 + (1 / text.length);
-    let qi = 0;
-    for (let i = 0; i < lower.length && qi < query.length; i++) { if (lower[i] === query[qi]) qi++; }
-    if (qi === query.length) return 20 + (qi / text.length);
     return 0;
   }
 
@@ -1920,6 +1958,13 @@ class OurGroceriesKioskCard extends HTMLElement {
         height: 100%;
         display: flex;
         flex-direction: column;
+      }
+
+      :host(.og-adding:not(.og-admin)) ha-card {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        border-radius: 0;
       }
 
       .hidden { display: none !important; }
@@ -2079,8 +2124,15 @@ class OurGroceriesKioskCard extends HTMLElement {
       .og-add-item-row.og-tapped input { border-color: var(--accent-color); }
 
       /* ---- Add view ---- */
+      .og-add-view-scroll {
+        flex: 1; min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        display: flex; flex-direction: column;
+      }
       .og-add-header {
         gap: 8px;
+        position: sticky; top: 0; z-index: 20;
       }
       .og-add-input-wrapper {
         flex: 1; position: relative;
@@ -2105,12 +2157,8 @@ class OurGroceriesKioskCard extends HTMLElement {
         touch-action: manipulation;
       }
       .og-add-clear-btn:active { opacity: 0.7; }
-      .og-add-view-body-wrapper {
-        position: relative; flex: 1; min-height: 0;
-      }
       .og-add-toast {
-        position: absolute; top: 6px; left: 12px; right: 12px;
-        z-index: 110;
+        margin: 6px 12px 0;
         display: flex; align-items: center; justify-content: space-between;
         padding: 12px 16px;
         background: var(--snackbar-bg, #323232); color: var(--snackbar-text, #fff);
@@ -2130,10 +2178,7 @@ class OurGroceriesKioskCard extends HTMLElement {
       }
       .og-add-toast-action:active { opacity: 0.7; }
       .og-add-view-body {
-        flex: 1; overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
         display: flex; flex-direction: column;
-        min-height: 0;
       }
       .og-add-view-item {
         display: flex; align-items: center;

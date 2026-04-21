@@ -1,5 +1,6 @@
 """OurGroceries Kiosk — HACS integration for managing OurGroceries lists."""
 
+import hashlib
 import logging
 import os
 import re
@@ -32,7 +33,17 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+CARD_JS_PATH = os.path.join(FRONTEND_DIR, "ourgroceries-kiosk-card.js")
 CARD_URL = f"/{DOMAIN}/ourgroceries-kiosk-card.js"
+
+
+def _js_cache_hash() -> str:
+    """Return a short hash of the JS file for cache busting."""
+    try:
+        with open(CARD_JS_PATH, "rb") as f:
+            return hashlib.md5(f.read()).hexdigest()[:8]
+    except OSError:
+        return "0"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -55,13 +66,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(
             CARD_URL,
-            os.path.join(FRONTEND_DIR, "ourgroceries-kiosk-card.js"),
+            CARD_JS_PATH,
             cache_headers=False,
         )]
     )
 
-    # Register as a Lovelace resource so users don't have to manually add it
-    await _async_register_lovelace_resource(hass)
+    # Register as a Lovelace resource with cache-busting hash
+    card_url_versioned = f"{CARD_URL}?v={_js_cache_hash()}"
+    await _async_register_lovelace_resource(hass, card_url_versioned)
 
     # Register WebSocket handlers
     _register_websocket_handlers(hass)
@@ -78,30 +90,36 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
-    """Register the card JS as a Lovelace resource if not already present."""
-    url = CARD_URL
-    # Use the lovelace resources collection if available
+async def _async_register_lovelace_resource(
+    hass: HomeAssistant, versioned_url: str
+) -> None:
+    """Register the card JS as a Lovelace resource."""
     try:
         resources = hass.data.get("lovelace", {})
         if hasattr(resources, "resources"):
             res_collection = resources.resources
-            # Check if already registered
             for item in res_collection.async_items():
-                if url in item.get("url", ""):
+                item_url = item.get("url", "")
+                if CARD_URL in item_url:
+                    if item_url != versioned_url:
+                        await res_collection.async_update_item(
+                            item["id"], {"url": versioned_url}
+                        )
+                        _LOGGER.info("Updated Lovelace resource: %s", versioned_url)
                     return
             await res_collection.async_create_item(
-                {"url": url, "res_type": "module"}
+                {"url": versioned_url, "res_type": "module"}
             )
-            _LOGGER.info("Registered Lovelace resource: %s", url)
+            _LOGGER.info("Registered Lovelace resource: %s", versioned_url)
             return
     except Exception:
         pass
 
-    # Fallback: add as extra module URL for the frontend
     hass.data.setdefault("frontend_extra_module_url", set())
-    if url not in hass.data["frontend_extra_module_url"]:
-        hass.data["frontend_extra_module_url"].add(url)
+    for existing in list(hass.data["frontend_extra_module_url"]):
+        if CARD_URL in existing:
+            hass.data["frontend_extra_module_url"].discard(existing)
+    hass.data["frontend_extra_module_url"].add(versioned_url)
 
 
 class OurGroceriesPhotoView(HomeAssistantView):
